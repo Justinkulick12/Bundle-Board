@@ -5,9 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Warehouse Trip Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
+
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <!-- Firebase modular imports -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
+      authDomain: "bundle-board-dashboard.firebaseapp.com",
+      databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
+      projectId: "bundle-board-dashboard",
+      storageBucket: "bundle-board-dashboard.firebasestorage.app",
+      messagingSenderId: "114676418819",
+      appId: "1:114676418819:web:fd8a544213d76b56050136",
+      measurementId: "G-M2WCBZ94YS"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Attach to window so app.js (module) can use it
+    window.firebaseDb = db;
+    window.firebaseRef = ref;
+    window.firebaseSet = set;
+    window.firebaseOnValue = onValue;
+  </script>
 </head>
 <body>
   <header>
@@ -42,15 +69,9 @@
     </section>
 
     <section id="charts-section">
-      <div class="chart-container">
-        <canvas id="statusChart"></canvas>
-      </div>
-      <div class="chart-container">
-        <canvas id="dailyChart"></canvas>
-      </div>
-      <div class="chart-container">
-        <canvas id="metricChart"></canvas>
-      </div>
+      <div class="chart-container"><canvas id="statusChart"></canvas></div>
+      <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+      <div class="chart-container"><canvas id="metricChart"></canvas></div>
     </section>
 
     <section id="trip-summary">
@@ -105,9 +126,14 @@
       <div id="kpi-container"></div>
       <canvas id="statusChart" width="400" height="200"></canvas>
       <canvas id="dailyChart" width="400" height="200"></canvas>
-      <canvas id="metricChart" width="400" height="200"></canvas>
+      <canvas id="metricChart" width="400" height= "200"></canvas>
     </section>
   </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
 
   <script src="app.js"></script>
 </body>
