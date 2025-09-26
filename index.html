@@ -2,71 +2,114 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shappi Warehouse Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Warehouse Trip Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>Shappi Warehouse Dashboard</h1>
-    <div class="controls">
-      <div class="filters">
-        <label for="dateStart">From:</label>
-        <input type="date" id="dateStart" />
-        <label for="dateEnd">To:</label>
-        <input type="date" id="dateEnd" />
-        <button id="applyDateFilter">Apply</button>
-        <button id="resetDateFilter">Reset</button>
-      </div>
-      <div class="view-toggle">
-        <button id="btnGrid">Grid View</button>
-        <button id="btnList">List View</button>
-      </div>
-    </div>
+    <h1>📦 Warehouse Trip Dashboard</h1>
   </header>
 
-  <section id="summary-metrics">
-    <div>Total Trips: <span id="totalTrips">0</span></div>
-    <div>Total Items Accepted: <span id="totalItems">0</span></div>
-  </section>
-
-  <section id="charts-section">
-    <canvas id="statusChart" width="400" height="200"></canvas>
-  </section>
-
   <main>
-    <!-- Grid Container -->
-    <div id="gridView" class="grid-container">
-      <div class="grid-header status-col"></div>
-      <!-- Weekday headers will be inserted dynamically -->
-      <!-- Status rows / cells will be filled dynamically -->
-    </div>
+    <section id="upload-section">
+      <label for="csvUpload">Upload Trip CSV:</label>
+      <input type="file" id="csvUpload" accept=".csv" />
+      <div id="date-filter">
+        <button data-range="thisWeek">This Week</button>
+        <button data-range="nextWeek">Next Week</button>
+        <button data-range="allUpcoming">All Upcoming</button>
+        <label for="startDate">Start:</label>
+        <input type="date" id="startDate" />
+        <label for="endDate">End:</label>
+        <input type="date" id="endDate" />
+        <button id="applyDateFilter">Apply</button>
+      </div>
+    </section>
 
-    <!-- List View (hidden by default) -->
-    <div id="listView" class="list-container" style="display: none;">
-      <table>
+    <section id="legend-section">
+      <strong>Color Legend: </strong>
+      <span class="legend red-status">Red = status not “TX Approved”</span>
+      <span class="legend special-dest">Orange = Dest in CA, NV, NJ, NY, CO, MA</span>
+      <span class="legend highlight-name">Purple = Ambassador / special name</span>
+    </section>
+
+    <section id="top-metrics">
+      <div id="top-kpi-container"></div>
+    </section>
+
+    <section id="charts-section">
+      <div class="chart-container">
+        <canvas id="statusChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="dailyChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="metricChart"></canvas>
+      </div>
+    </section>
+
+    <section id="trip-summary">
+      <h2>Filtered Trips</h2>
+      <table id="trip-table">
         <thead>
           <tr>
-            <th>Trip ID</th><th>Traveler</th><th>Ship Bundle</th><th>Max USA Date</th>
-            <th>USA Dest</th><th>Items Accepted</th><th>Status</th><th>Items Ready</th>
-            <th>Assigned To</th>
+            <th>Trip ID</th>
+            <th>Items Accepted</th>
+            <th>Traveler</th>
+            <th>USA Dest</th>
+            <th>Trip Status</th>
+            <th>Ship Bundle</th>
+            <th>Max USA Date</th>
           </tr>
         </thead>
-        <tbody id="listBody">
-          <!-- Rows injected here -->
-        </tbody>
+        <tbody></tbody>
       </table>
-    </div>
+    </section>
+
+    <section id="status-board">
+      <h2>Trip Status Board</h2>
+      <div class="bucket-container">
+        <div class="bucket" data-status="Pending Verification">
+          <h3>Pending Verification</h3>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TX Approved">
+          <h3>TX Approved</h3>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TA In Progress">
+          <h3>TA In Progress</h3>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TA Completed">
+          <h3>TA Completed</h3>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="Bundling In Progress">
+          <h3>Bundling In Progress</h3>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="Bundle Completed">
+          <h3>Bundle Completed</h3>
+          <div class="bucket-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="dashboard-charts">
+      <div id="kpi-container"></div>
+      <canvas id="statusChart" width="400" height="200"></canvas>
+      <canvas id="dailyChart" width="400" height="200"></canvas>
+      <canvas id="metricChart" width="400" height="200"></canvas>
+    </section>
   </main>
 
-  <footer>
-    <input type="file" id="csvInput" accept=".csv" />
-    <p>Upload CSV to load trips.</p>
-  </footer>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
+
