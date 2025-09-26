@@ -1,4 +1,4 @@
-// app.js — module style, using the firebase stuff from index.html
+// app.js — full version with drag & drop fix (no forced status override)
 
 const db = window.firebaseDb;
 const firebaseRef = window.firebaseRef;
@@ -32,6 +32,7 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
+// Load trips from Firebase
 function loadTripsFromFirebase() {
   const tripsRef = firebaseRef(db, 'currentTrips');
   firebaseOnValue(tripsRef, snapshot => {
@@ -43,6 +44,7 @@ function loadTripsFromFirebase() {
   });
 }
 
+// Upload the entire trips list to Firebase
 function uploadTripsToFirebase(tripsList) {
   const tripsRef = firebaseRef(db, 'currentTrips');
   firebaseSet(tripsRef, tripsList)
@@ -125,6 +127,7 @@ function applyDateFilter() {
   const start = parseDateOnly(startDateInp.value);
   const end = parseDateOnly(endDateInp.value);
   let filtered = trips;
+
   if (start && end) {
     filtered = trips.filter(trip => {
       const bd = parseDateOnly(trip['Ship Bundle']);
@@ -137,11 +140,8 @@ function applyDateFilter() {
     });
   }
 
-  filtered.forEach(trip => {
-    if (trip.currentStatus.toLowerCase() !== 'tx approved') {
-      trip.currentStatus = 'Pending Verification';
-    }
-  });
+  // ** We removed the logic that forcibly resets status here **
+  // That was causing snaps back.
 
   renderTopMetrics(filtered);
   renderTripTable(filtered);
@@ -170,10 +170,10 @@ function renderTopMetrics(list) {
     ['Total Pending', pending],
     ['Ambassador Trips', ambassadors]
   ];
-  metrics.forEach(([l, v]) => {
+  metrics.forEach(([label, val]) => {
     const div = document.createElement('div');
     div.className = 'kpi-card';
-    div.innerHTML = `<h3>${l}</h3><p>${v}</p>`;
+    div.innerHTML = `<h3>${label}</h3><p>${val}</p>`;
     container.appendChild(div);
   });
 }
@@ -288,11 +288,15 @@ function initDragAndDrop() {
         const newBucket = evt.to.closest('.bucket');
         const newStatus = newBucket.dataset.status;
         const tripId = card.dataset.tripId;
-        const trip = trips.find(t => t['Trip ID'] === tripId);
+        const trip = trips.find(t => String(t['Trip ID']) === String(tripId));
         if (trip) {
           trip.currentStatus = newStatus;
           uploadTripsToFirebase(trips);
-          renderChartsAndKPIs(trips);
+          // Slight delay before re-render so we don’t override
+          setTimeout(() => {
+            renderChartsAndKPIs(trips);
+            renderBuckets(trips);
+          }, 200);
         }
       }
     });
@@ -302,21 +306,19 @@ function initDragAndDrop() {
 function renderChartsAndKPIs(list) {
   const statusCounts = {};
   const dayCounts = {};
-  let totalItems = 0, totalWeight = 0, specialDestTrips = 0, readyToProcessCount = 0;
+  let totalItems = 0, totalWeight = 0, specialDestTrips = 0, readyToProcess = 0;
 
   list.forEach(t => {
     statusCounts[t.currentStatus] = (statusCounts[t.currentStatus] || 0) + 1;
     const bd = t['Ship Bundle'];
-    if (bd) {
-      dayCounts[bd] = (dayCounts[bd] || 0) + 1;
-    }
+    if (bd) dayCounts[bd] = (dayCounts[bd] || 0) + 1;
     const items = parseInt(t['Items Accepted']);
     if (!isNaN(items)) totalItems += items;
     const w = parseFloat(t['Weight']);
     if (!isNaN(w)) totalWeight += w;
     if (SPECIAL_DESTS.has((t['USA Dest']||'').toUpperCase())) specialDestTrips++;
     if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
-      readyToProcessCount += items || 0;
+      readyToProcess += items || 0;
     }
   });
 
@@ -329,7 +331,7 @@ function renderChartsAndKPIs(list) {
     ['Total Items', totalItems],
     ['Total Weight', totalWeight.toFixed(2)],
     ['Special Dest Trips', specialDestTrips],
-    ['Ready to Process Items', readyToProcessCount]
+    ['Ready to Process Items', readyToProcess]
   ];
   bottomKpis.forEach(([label, value]) => {
     const card = document.createElement('div');
@@ -346,7 +348,7 @@ function renderChartsAndKPIs(list) {
       labels: Object.keys(statusCounts),
       datasets: [{
         data: Object.values(statusCounts),
-        backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1']
+        backgroundColor: ['#4e79a7','#f28e2c','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1']
       }]
     }
   });
@@ -376,7 +378,7 @@ function renderChartsAndKPIs(list) {
         data: Object.values(dayCounts),
         borderColor: '#e15759',
         fill: false
-      }, {
+      },{
         label: 'Items per Day',
         data: Object.keys(dayCounts).map(day => {
           return list
@@ -389,4 +391,5 @@ function renderChartsAndKPIs(list) {
     }
   });
 }
+
 
