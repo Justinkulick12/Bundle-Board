@@ -1,3 +1,10 @@
+// app.js — module style, using the firebase stuff from index.html
+
+const db = window.firebaseDb;
+const firebaseRef = window.firebaseRef;
+const firebaseSet = window.firebaseSet;
+const firebaseOnValue = window.firebaseOnValue;
+
 let trips = [];
 let statusChart, dailyChart, metricChart;
 
@@ -9,43 +16,37 @@ const applyDateFilterBtn = document.getElementById('applyDateFilter');
 const dateRangeButtons = document.querySelectorAll('#date-filter button[data-range]');
 
 const SPECIAL_NAMES = new Set([
-  "Gabriela", "Endara", "Jose Arroyo", "Andres Alvarez", "Gianni Bloise",
-  "Genesis Ronquillo", "Martha Aguirre", "Paola Salcan", "Karen Chapman",
-  "Daniel Molineros", "Veronica Endara", "Delia Vera", "Milton Jijon",
-  "Kenia Jimenez", "Carlos Matute", "Andrea Martinez", "Delicia Rodriguez",
-  "Mendez", "Vuelo de carga", "Daniel Lliguicota", "Romina Campodonico",
-  "Jeampiero", "Isabella Piedrahita", "Juan C Chevrasco", "Nicole Matamoros",
-  "Fabricio Triviño", "Freddy Arboleda", "David Muzzio", "Ruliova",
-  "Darwin Parrales", "Eva Novotona", "Jorge Alejandro", "Josue Alejandro",
-  "Betty Lastre", "Priscila Alejandro", "Jeniffer Zambrano", "Alison Fajardo",
-  "Wesley Triviño", "Leonardo Pauta", "Ornella Bloise", "Erick Pauta",
-  "Bruno Pagnacco", "Katy Valdivieso", "Eddy Vera"
+  "Gabriela","Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise",
+  "Genesis Ronquillo","Martha Aguirre","Paola Salcan","Karen Chapman",
+  "Daniel Molineros","Veronica Endara","Delia Vera","Milton Jijon",
+  "Kenia Jimenez","Carlos Matute","Andrea Martinez","Delicia Rodriguez",
+  "Mendez","Vuelo de carga","Daniel Lliguicota","Romina Campodonico",
+  "Jeampiero","Isabella Piedrahita","Juan C Chevrasco","Nicole Matamoros",
+  "Fabricio Triviño","Freddy Arboleda","David Muzzio","Ruliova",
+  "Darwin Parrales","Eva Novotona","Jorge Alejandro","Josue Alejandro",
+  "Betty Lastre","Priscila Alejandro","Jeniffer Zambrano","Alison Fajardo",
+  "Wesley Triviño","Leonardo Pauta","Ornella Bloise","Erick Pauta",
+  "Bruno Pagnacco","Katy Valdivieso","Eddy Vera"
 ]);
 
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
+const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-const ASSIGNEES = ["Justin", "Caz", "Greg", "CJ"];
+function loadTripsFromFirebase() {
+  const tripsRef = firebaseRef(db, 'currentTrips');
+  firebaseOnValue(tripsRef, snapshot => {
+    const val = snapshot.val();
+    if (val) {
+      trips = val;
+      applyDateFilter();
+    }
+  });
+}
 
-function getRangeFromShortcut(shortcut) {
-  const today = new Date();
-  const toDateOnly = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  switch (shortcut) {
-    case 'thisWeek': {
-      const { start, end } = getWeekRange(today);
-      return { start: toDateOnly(start), end: toDateOnly(end) };
-    }
-    case 'nextWeek': {
-      const { start, end } = getWeekRange(today);
-      const ns = new Date(start); ns.setDate(start.getDate() + 7);
-      const ne = new Date(end); ne.setDate(end.getDate() + 7);
-      return { start: toDateOnly(ns), end: toDateOnly(ne) };
-    }
-    case 'allUpcoming': {
-      return { start: toDateOnly(today), end: null };
-    }
-    default:
-      return { start: null, end: null };
-  }
+function uploadTripsToFirebase(tripsList) {
+  const tripsRef = firebaseRef(db, 'currentTrips');
+  firebaseSet(tripsRef, tripsList)
+    .catch(err => console.error("Firebase write error:", err));
 }
 
 csvUpload.addEventListener('change', e => {
@@ -61,7 +62,7 @@ csvUpload.addEventListener('change', e => {
           currentStatus: row['Trip Verification Status'] || 'Pending Verification',
           assignedTo: ''
         }));
-        saveToStorage();
+        uploadTripsToFirebase(trips);
         applyDateFilter();
       }
     });
@@ -69,11 +70,7 @@ csvUpload.addEventListener('change', e => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-  const stored = localStorage.getItem('lastTrips');
-  if (stored) {
-    trips = JSON.parse(stored);
-    applyDateFilter();
-  }
+  loadTripsFromFirebase();
 });
 
 applyDateFilterBtn.addEventListener('click', () => {
@@ -89,17 +86,12 @@ dateRangeButtons.forEach(btn => {
   });
 });
 
-function saveToStorage() {
-  localStorage.setItem('lastTrips', JSON.stringify(trips));
-}
-
 function parseDateOnly(str) {
   if (!str) return null;
   const d = new Date(str);
   if (isNaN(d)) return null;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
-
 function getWeekRange(date) {
   const day = date.getDay();
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
@@ -107,6 +99,26 @@ function getWeekRange(date) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return { start: monday, end: sunday };
+}
+function getRangeFromShortcut(shortcut) {
+  const today = new Date();
+  const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  switch (shortcut) {
+    case 'thisWeek': {
+      const { start, end } = getWeekRange(d0);
+      return { start, end };
+    }
+    case 'nextWeek': {
+      const { start, end } = getWeekRange(d0);
+      const ns = new Date(start); ns.setDate(ns.getDate() + 7);
+      const ne = new Date(end); ne.setDate(ne.getDate() + 7);
+      return { start: ns, end: ne };
+    }
+    case 'allUpcoming':
+      return { start: d0, end: null };
+    default:
+      return { start: null, end: null };
+  }
 }
 
 function applyDateFilter() {
@@ -140,13 +152,13 @@ function applyDateFilter() {
 function renderTopMetrics(list) {
   const container = document.getElementById('top-kpi-container');
   container.innerHTML = '';
-  let total = 0, approved = 0, pending = 0, ambassadors = 0;
+  let total=0, approved=0, pending=0, ambassadors=0;
   list.forEach(trip => {
     total++;
     if (trip.currentStatus.toLowerCase() === 'tx approved') approved++;
     else pending++;
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         ambassadors++;
         break;
       }
@@ -173,11 +185,11 @@ function renderTripTable(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       tr.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
       tr.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         tr.classList.add('highlight-name');
         break;
       }
@@ -216,11 +228,11 @@ function renderBuckets(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       card.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
       card.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         card.classList.add('highlight-name');
         break;
       }
@@ -247,13 +259,12 @@ function renderBuckets(list) {
     sel.value = trip.assignedTo || '';
     sel.addEventListener('change', e => {
       trip.assignedTo = e.target.value;
-      saveToStorage();
+      uploadTripsToFirebase(trips);
     });
 
     const bucket = document.querySelector(`.bucket[data-status="${trip.currentStatus}"] .bucket-list`);
-    if (bucket) {
-      bucket.appendChild(card);
-    } else {
+    if (bucket) bucket.appendChild(card);
+    else {
       const fallback = document.querySelector(`.bucket[data-status="Pending Verification"] .bucket-list`);
       fallback.appendChild(card);
     }
@@ -280,7 +291,7 @@ function initDragAndDrop() {
         const trip = trips.find(t => t['Trip ID'] === tripId);
         if (trip) {
           trip.currentStatus = newStatus;
-          saveToStorage();
+          uploadTripsToFirebase(trips);
           renderChartsAndKPIs(trips);
         }
       }
@@ -291,10 +302,7 @@ function initDragAndDrop() {
 function renderChartsAndKPIs(list) {
   const statusCounts = {};
   const dayCounts = {};
-  let totalItems = 0;
-  let totalWeight = 0;
-  let specialDestTrips = 0;
-  let readyToProcessCount = 0;
+  let totalItems = 0, totalWeight = 0, specialDestTrips = 0, readyToProcessCount = 0;
 
   list.forEach(t => {
     statusCounts[t.currentStatus] = (statusCounts[t.currentStatus] || 0) + 1;
@@ -306,9 +314,7 @@ function renderChartsAndKPIs(list) {
     if (!isNaN(items)) totalItems += items;
     const w = parseFloat(t['Weight']);
     if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) {
-      specialDestTrips++;
-    }
+    if (SPECIAL_DESTS.has((t['USA Dest']||'').toUpperCase())) specialDestTrips++;
     if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
       readyToProcessCount += items || 0;
     }
@@ -383,3 +389,4 @@ function renderChartsAndKPIs(list) {
     }
   });
 }
+
