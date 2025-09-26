@@ -1,309 +1,385 @@
-// Constants
-const STATES_RED = new Set(["NY","NJ","CA","MA","NV","OR"]);
-const TRAVELER_PURPLE = new Set([
-  "Gabriela Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise","Genesis Ronquillo",
-  "Martha Aguirre","Paola Salcan","Karen Chapman","Daniel Molineros","Anto",
-  "Veronica Endara","Delia Vera","Milton Jijon","Kenia Jimenez","Carlos Matute",
-  "Andrea Martinez","Delicia Rodriguez Mendez","Genesis Ronquillo - Vuelo de carga",
-  "Daniel Lliguicota","Romina Campodonico + Jeampiero","Isabella Piedrahita",
-  "Juan C Chevrasco","Nicole Matamoros","Fabricio Triviño","Freddy Arboleda",
-  "David Muzzio Ruliova","Santiago Ruliova","Betty Lastre","Priscila Alejandro",
-  "Jeniffer Zambrano","Alison Fajardo","Wesley Triviño","Leonardo Pauta",
-  "Erick Pauta","Dario Pauta","Diana Pauta","Jorge Ivan Alejandro","Ana Belen Alejandro",
-  "Bruno Pagnacco","Katy Valdivieso","Eddy Vera","Ericka Pluas","Domenica Pluas"
+let trips = [];
+let statusChart, dailyChart, metricChart;
+
+const csvUpload = document.getElementById('csvUpload');
+const tripTableBody = document.querySelector('#trip-table tbody');
+const startDateInp = document.getElementById('startDate');
+const endDateInp = document.getElementById('endDate');
+const applyDateFilterBtn = document.getElementById('applyDateFilter');
+const dateRangeButtons = document.querySelectorAll('#date-filter button[data-range]');
+
+const SPECIAL_NAMES = new Set([
+  "Gabriela", "Endara", "Jose Arroyo", "Andres Alvarez", "Gianni Bloise",
+  "Genesis Ronquillo", "Martha Aguirre", "Paola Salcan", "Karen Chapman",
+  "Daniel Molineros", "Veronica Endara", "Delia Vera", "Milton Jijon",
+  "Kenia Jimenez", "Carlos Matute", "Andrea Martinez", "Delicia Rodriguez",
+  "Mendez", "Vuelo de carga", "Daniel Lliguicota", "Romina Campodonico",
+  "Jeampiero", "Isabella Piedrahita", "Juan C Chevrasco", "Nicole Matamoros",
+  "Fabricio Triviño", "Freddy Arboleda", "David Muzzio", "Ruliova",
+  "Darwin Parrales", "Eva Novotona", "Jorge Alejandro", "Josue Alejandro",
+  "Betty Lastre", "Priscila Alejandro", "Jeniffer Zambrano", "Alison Fajardo",
+  "Wesley Triviño", "Leonardo Pauta", "Ornella Bloise", "Erick Pauta",
+  "Bruno Pagnacco", "Katy Valdivieso", "Eddy Vera"
 ]);
 
-let allTrips = [];
+const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 
-// Save / load trip state (status, assignedName) in localStorage
-function saveTripState(tripId, field, value) {
-  const key = `tripState_${tripId}`;
-  let obj = JSON.parse(localStorage.getItem(key) || "{}");
-  obj[field] = value;
-  localStorage.setItem(key, JSON.stringify(obj));
-}
-function loadTripState(tripId) {
-  return JSON.parse(localStorage.getItem(`tripState_${tripId}`) || "{}");
-}
+const ASSIGNEES = ["Justin", "Caz", "Greg", "CJ"];
 
-// Helpers
-function parseDateString(str) {
-  return new Date(str);
-}
-function getWeekdayNumber(dt) {
-  const d = new Date(dt);
-  let wd = d.getDay(); // 0 = Sunday ... 6 = Saturday
-  if (wd === 0) wd = 7;
-  return wd;  // 1=Monday, …, 7=Sunday
-}
-function getDefaultDateRange() {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + 7);
-  return { start: now, end };
-}
-
-// SWITCH between views
-document.getElementById("btnGrid").addEventListener("click", () => {
-  document.getElementById("gridView").style.display = "";
-  document.getElementById("listView").style.display = "none";
-});
-document.getElementById("btnList").addEventListener("click", () => {
-  document.getElementById("gridView").style.display = "none";
-  document.getElementById("listView").style.display = "";
-});
-
-// Render header dates above weekdays
-function renderGridTemplate(startDate) {
-  const grid = document.getElementById("gridView");
-  // Clear grid contents
-  grid.innerHTML = "";
-  // We want first row: status-col empty, then weekdays with dates
-  let headerHtml = `<div class="grid-header status-col"></div>`;
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    headerHtml += `<div class="grid-header">${["Mon","Tue","Wed","Thu","Fri"][i]}<br>${label}</div>`;
+function getRangeFromShortcut(shortcut) {
+  const today = new Date();
+  const toDateOnly = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  switch (shortcut) {
+    case 'thisWeek': {
+      const { start, end } = getWeekRange(today);
+      return { start: toDateOnly(start), end: toDateOnly(end) };
+    }
+    case 'nextWeek': {
+      const { start, end } = getWeekRange(today);
+      const ns = new Date(start); ns.setDate(start.getDate() + 7);
+      const ne = new Date(end); ne.setDate(end.getDate() + 7);
+      return { start: toDateOnly(ns), end: toDateOnly(ne) };
+    }
+    case 'allUpcoming': {
+      return { start: toDateOnly(today), end: null };
+    }
+    default:
+      return { start: null, end: null };
   }
-  grid.insertAdjacentHTML("beforeend", headerHtml);
-
-  // Status rows
-  const statuses = ["Pending", "In Progress", "TX Approved", "Rejected", "Preparing", "TA Completed", "ReadyForLabel"];
-  statuses.forEach(status => {
-    // status label
-    grid.insertAdjacentHTML("beforeend", `<div class="status-col">${status}</div>`);
-    // five cells for Monday‑Friday
-    for (let day = 1; day <= 5; day++) {
-      grid.insertAdjacentHTML("beforeend",
-        `<div class="cell" data-status="${status}" data-day="${day}"></div>`);
-    }
-  });
 }
 
-// Clear all cells
-function clearGridCells() {
-  document.querySelectorAll("#gridView .cell").forEach(c => c.innerHTML = "");
-}
-
-// Metrics
-function renderMetrics(filteredTrips) {
-  document.getElementById("totalTrips").textContent = filteredTrips.length;
-  let sum = 0;
-  filteredTrips.forEach(tr => {
-    sum += Number(tr["Items Accepted"]) || 0;
-  });
-  document.getElementById("totalItems").textContent = sum;
-}
-
-// Render charts (status distribution)
-function renderStatusChart(trips) {
-  const ctx = document.getElementById("statusChart").getContext("2d");
-  const statusCounts = {};
-  trips.forEach(tr => {
-    const saved = loadTripState(tr["Trip ID"]);
-    const st = saved.status || tr["Trip Verification Status"];
-    statusCounts[st] = (statusCounts[st] || 0) + 1;
-  });
-  const labels = Object.keys(statusCounts);
-  const data = labels.map(l => statusCounts[l]);
-  new Chart(ctx, {
-    type: 'pie',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: labels.map(l => {
-        // color mapping logic or fallback
-        if (l === "TX Approved") return "#8BC34A";
-        if (l === "Pending" || l === "In Progress") return "#FFB74D";
-        if (l === "Rejected") return "#E57373";
-        return "#90A4AE";
-      }) }]
-    }
-  });
-}
-
-// Render grid view
-function renderGridView(filterStart, filterEnd) {
-  // Rebuild template with correct dates
-  renderGridTemplate(filterStart);
-  clearGridCells();
-  const filtered = allTrips.filter(trip => {
-    const bd = parseDateString(trip["Ship Bundle"]);
-    if (filterStart && filterEnd) {
-      return bd >= filterStart && bd <= filterEnd;
-    }
-    return true;
-  });
-  filtered.sort((a,b) => parseDateString(a["Ship Bundle"]) - parseDateString(b["Ship Bundle"]);
-
-  renderMetrics(filtered);
-  renderStatusChart(filtered);
-
-  filtered.forEach(trip => {
-    const weekday = getWeekdayNumber(trip["Ship Bundle"]);
-    if (weekday > 5) return;
-    const saved = loadTripState(trip["Trip ID"]);
-    const status = saved.status || trip["Trip Verification Status"];
-    const cell = document.querySelector(`#gridView .cell[data-status="${status}"][data-day="${weekday}"]`);
-    if (!cell) return;
-    const tile = createTile(trip, status);
-    cell.appendChild(tile);
-  });
-  setupDragAndDropGrid();
-}
-
-// Create a tile
-function createTile(trip, status) {
-  const div = document.createElement("div");
-  div.classList.add("trip-tile");
-  // highlight logic
-  if (trip["Trip Verification Status"] !== "TX Approved") div.classList.add("highlight-not-approved");
-  if (STATES_RED.has(trip["USA Dest"])) div.classList.add("highlight-dest-red");
-  if (TRAVELER_PURPLE.has(trip["Traveler"])) div.classList.add("highlight-trav-purple");
-
-  div.dataset.tripId = trip["Trip ID"];
-  div.dataset.status = status;
-
-  const sum = document.createElement("div");
-  sum.classList.add("summary");
-  sum.innerHTML = `
-    <div><strong>ID:</strong> ${trip["Trip ID"]}</div>
-    <div><strong>Traveler:</strong> ${trip["Traveler"]}</div>
-    <div><strong>Ship Bundle:</strong> ${trip["Ship Bundle"]}</div>
-    <div><strong>Dest:</strong> ${trip["USA Dest"]}</div>
-    <div><strong>Accepted:</strong> ${trip["Items Accepted"]}</div>
-    <div><strong>Status:</strong> ${status}</div>
-  `;
-  div.appendChild(sum);
-
-  const dt = document.createElement("div");
-  dt.classList.add("details");
-  dt.innerHTML = `
-    <div><strong>Max USA Date:</strong> ${trip["Max USA Date"]}</div>
-    <div><strong>Items Ready:</strong> ${trip["Items Ready to process"]}</div>
-    <div><strong>Total Weight:</strong> ${trip["Total Bundle Weight"]}</div>
-    <div><strong>User ID:</strong> ${trip["User ID"]}</div>
-  `;
-  div.appendChild(dt);
-
-  div.addEventListener("click", e => {
-    if (e.target.tagName.toLowerCase() === "input") return;
-    div.classList.toggle("expanded");
-  });
-
-  const inp = document.createElement("input");
-  inp.type = "text";
-  inp.placeholder = "Your name...";
-  inp.classList.add("assign-input");
-  const saved = loadTripState(trip["Trip ID"]);
-  inp.value = saved.assignedName || "";
-  inp.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      saveTripState(trip["Trip ID"], "assignedName", inp.value.trim());
-      inp.blur();
-    }
-  });
-  div.appendChild(inp);
-
-  return div;
-}
-
-function setupDragAndDropGrid() {
-  document.querySelectorAll("#gridView .cell").forEach(cell => {
-    Sortable.create(cell, {
-      group: "sharedGrid",
-      animation: 150,
-      onAdd: (evt) => {
-        const tile = evt.item;
-        const newStatus = evt.to.getAttribute("data-status");
-        const tid = tile.dataset.tripId;
-        saveTripState(tid, "status", newStatus);
-      }
-    });
-  });
-}
-
-// LIST VIEW rendering
-function renderListView(filterStart, filterEnd) {
-  const tbody = document.getElementById("listBody");
-  tbody.innerHTML = "";
-  const filtered = allTrips.filter(trip => {
-    const bd = parseDateString(trip["Ship Bundle"]);
-    if (filterStart && filterEnd) {
-      return bd >= filterStart && bd <= filterEnd;
-    }
-    return true;
-  });
-  filtered.sort((a,b) => parseDateString(a["Ship Bundle"]) - parseDateString(b["Ship Bundle"]);
-
-  filtered.forEach(trip => {
-    const saved = loadTripState(trip["Trip ID"]);
-    const status = saved.status || trip["Trip Verification Status"];
-    const tr = document.createElement("tr");
-
-    if (trip["Trip Verification Status"] !== "TX Approved") tr.classList.add("highlight-not-approved");
-    if (STATES_RED.has(trip["USA Dest"])) tr.classList.add("highlight-dest-red");
-    if (TRAVELER_PURPLE.has(trip["Traveler"])) tr.classList.add("highlight-trav-purple");
-
-    tr.innerHTML = `
-      <td>${trip["Trip ID"]}</td>
-      <td>${trip["Traveler"]}</td>
-      <td>${trip["Ship Bundle"]}</td>
-      <td>${trip["Max USA Date"] || ""}</td>
-      <td>${trip["USA Dest"]}</td>
-      <td>${trip["Items Accepted"]}</td>
-      <td>${status}</td>
-      <td>${trip["Items Ready to process"] || ""}</td>
-      <td><input type="text" class="assign-input-list" data-tripid="${trip["Trip ID"]}" value="${saved.assignedName || ""}" /></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  // Attach Enter key events to list view inputs
-  document.querySelectorAll(".assign-input-list").forEach(inp => {
-    inp.addEventListener("keydown", e => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const id = inp.dataset.tripid;
-        saveTripState(id, "assignedName", inp.value.trim());
-        inp.blur();
-      }
-    });
-  });
-
-  renderMetrics(filtered);
-  renderStatusChart(filtered);
-}
-
-// CSV load + filter wiring
-document.getElementById("csvInput").addEventListener("change", e => {
+csvUpload.addEventListener('change', e => {
   const file = e.target.files[0];
-  if (!file) return;
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: results => {
-      allTrips = results.data;
-      const { start, end } = getDefaultDateRange();
-      document.getElementById("dateStart").valueAsDate = start;
-      document.getElementById("dateEnd").valueAsDate = end;
-      renderGridView(start, end);
-      renderListView(start, end);
-    }
-  });
-});
-document.getElementById("applyDateFilter").addEventListener("click", () => {
-  const start = document.getElementById("dateStart").valueAsDate;
-  const end = document.getElementById("dateEnd").valueAsDate;
-  renderGridView(start, end);
-  renderListView(start, end);
-});
-document.getElementById("resetDateFilter").addEventListener("click", () => {
-  const { start, end } = getDefaultDateRange();
-  document.getElementById("dateStart").valueAsDate = start;
-  document.getElementById("dateEnd").valueAsDate = end;
-  renderGridView(start, end);
-  renderListView(start, end);
+  if (file) {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete(results) {
+        const data = results.data;
+        trips = data.map(row => ({
+          ...row,
+          currentStatus: row['Trip Verification Status'] || 'Pending Verification',
+          assignedTo: ''
+        }));
+        saveToStorage();
+        applyDateFilter();
+      }
+    });
+  }
 });
 
+window.addEventListener('DOMContentLoaded', () => {
+  const stored = localStorage.getItem('lastTrips');
+  if (stored) {
+    trips = JSON.parse(stored);
+    applyDateFilter();
+  }
+});
+
+applyDateFilterBtn.addEventListener('click', () => {
+  applyDateFilter();
+});
+dateRangeButtons.forEach(btn => {
+  btn.addEventListener('click', evt => {
+    const rng = evt.target.getAttribute('data-range');
+    const { start, end } = getRangeFromShortcut(rng);
+    startDateInp.value = start ? start.toISOString().slice(0,10) : '';
+    endDateInp.value = end ? end.toISOString().slice(0,10) : '';
+    applyDateFilter();
+  });
+});
+
+function saveToStorage() {
+  localStorage.setItem('lastTrips', JSON.stringify(trips));
+}
+
+function parseDateOnly(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function getWeekRange(date) {
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(date.setDate(diff));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { start: monday, end: sunday };
+}
+
+function applyDateFilter() {
+  const start = parseDateOnly(startDateInp.value);
+  const end = parseDateOnly(endDateInp.value);
+  let filtered = trips;
+  if (start && end) {
+    filtered = trips.filter(trip => {
+      const bd = parseDateOnly(trip['Ship Bundle']);
+      return bd && bd >= start && bd <= end;
+    });
+  } else if (start && !end) {
+    filtered = trips.filter(trip => {
+      const bd = parseDateOnly(trip['Ship Bundle']);
+      return bd && bd >= start;
+    });
+  }
+
+  filtered.forEach(trip => {
+    if (trip.currentStatus.toLowerCase() !== 'tx approved') {
+      trip.currentStatus = 'Pending Verification';
+    }
+  });
+
+  renderTopMetrics(filtered);
+  renderTripTable(filtered);
+  renderBuckets(filtered);
+  renderChartsAndKPIs(filtered);
+}
+
+function renderTopMetrics(list) {
+  const container = document.getElementById('top-kpi-container');
+  container.innerHTML = '';
+  let total = 0, approved = 0, pending = 0, ambassadors = 0;
+  list.forEach(trip => {
+    total++;
+    if (trip.currentStatus.toLowerCase() === 'tx approved') approved++;
+    else pending++;
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        ambassadors++;
+        break;
+      }
+    }
+  });
+  const metrics = [
+    ['Total Trips', total],
+    ['Total Approved', approved],
+    ['Total Pending', pending],
+    ['Ambassador Trips', ambassadors]
+  ];
+  metrics.forEach(([l, v]) => {
+    const div = document.createElement('div');
+    div.className = 'kpi-card';
+    div.innerHTML = `<h3>${l}</h3><p>${v}</p>`;
+    container.appendChild(div);
+  });
+}
+
+function renderTripTable(list) {
+  tripTableBody.innerHTML = '';
+  list.forEach(trip => {
+    const tr = document.createElement('tr');
+    if (trip.currentStatus.toLowerCase() !== 'tx approved') {
+      tr.classList.add('red-status');
+    }
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+      tr.classList.add('special-dest');
+    }
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        tr.classList.add('highlight-name');
+        break;
+      }
+    }
+    const cells = [
+      trip['Trip ID'],
+      trip['Items Accepted'],
+      trip['Traveler'],
+      trip['USA Dest'],
+      trip['currentStatus'],
+      trip['Ship Bundle'],
+      trip['Max USA Date']
+    ];
+    cells.forEach(val => {
+      const td = document.createElement('td');
+      td.textContent = val !== undefined ? val : '';
+      tr.appendChild(td);
+    });
+    tr.addEventListener('click', () => {
+      const details = Object.entries(trip).map(([k, v]) => `${k}: ${v}`).join('\n');
+      alert(details);
+    });
+    tripTableBody.appendChild(tr);
+  });
+}
+
+function renderBuckets(list) {
+  const bucketLists = document.querySelectorAll('.bucket-list');
+  bucketLists.forEach(b => b.innerHTML = '');
+
+  list.forEach(trip => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.tripId = trip['Trip ID'];
+
+    if (trip.currentStatus.toLowerCase() !== 'tx approved') {
+      card.classList.add('red-status');
+    }
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+      card.classList.add('special-dest');
+    }
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        card.classList.add('highlight-name');
+        break;
+      }
+    }
+    if (trip.currentStatus === 'TA Completed') {
+      card.classList.add('ta-completed');
+    }
+    if (trip.currentStatus === 'Bundle Completed') {
+      card.classList.add('bundle-completed');
+    }
+
+    let opts = `<option value="">Assign To</option>`;
+    ASSIGNEES.forEach(nm => {
+      opts += `<option value="${nm}">${nm}</option>`;
+    });
+
+    card.innerHTML = `
+      <strong>${trip['Trip ID']}</strong><br>
+      ${trip['Traveler']}<br>
+      ${trip['Ship Bundle']}<br>
+      <select class="assign-select">${opts}</select>
+    `;
+    const sel = card.querySelector('.assign-select');
+    sel.value = trip.assignedTo || '';
+    sel.addEventListener('change', e => {
+      trip.assignedTo = e.target.value;
+      saveToStorage();
+    });
+
+    const bucket = document.querySelector(`.bucket[data-status="${trip.currentStatus}"] .bucket-list`);
+    if (bucket) {
+      bucket.appendChild(card);
+    } else {
+      const fallback = document.querySelector(`.bucket[data-status="Pending Verification"] .bucket-list`);
+      fallback.appendChild(card);
+    }
+  });
+
+  initDragAndDrop();
+}
+
+function initDragAndDrop() {
+  const lists = document.querySelectorAll('.bucket-list');
+  lists.forEach(list => {
+    new Sortable(list, {
+      group: {
+        name: 'shared',
+        pull: true,
+        put: true
+      },
+      animation: 150,
+      onEnd(evt) {
+        const card = evt.item;
+        const newBucket = evt.to.closest('.bucket');
+        const newStatus = newBucket.dataset.status;
+        const tripId = card.dataset.tripId;
+        const trip = trips.find(t => t['Trip ID'] === tripId);
+        if (trip) {
+          trip.currentStatus = newStatus;
+          saveToStorage();
+          renderChartsAndKPIs(trips);
+        }
+      }
+    });
+  });
+}
+
+function renderChartsAndKPIs(list) {
+  const statusCounts = {};
+  const dayCounts = {};
+  let totalItems = 0;
+  let totalWeight = 0;
+  let specialDestTrips = 0;
+  let readyToProcessCount = 0;
+
+  list.forEach(t => {
+    statusCounts[t.currentStatus] = (statusCounts[t.currentStatus] || 0) + 1;
+    const bd = t['Ship Bundle'];
+    if (bd) {
+      dayCounts[bd] = (dayCounts[bd] || 0) + 1;
+    }
+    const items = parseInt(t['Items Accepted']);
+    if (!isNaN(items)) totalItems += items;
+    const w = parseFloat(t['Weight']);
+    if (!isNaN(w)) totalWeight += w;
+    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) {
+      specialDestTrips++;
+    }
+    if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
+      readyToProcessCount += items || 0;
+    }
+  });
+
+  const totalTrips = list.length;
+
+  const kpiContainer = document.getElementById('kpi-container');
+  kpiContainer.innerHTML = '';
+  const bottomKpis = [
+    ['Total Trips', totalTrips],
+    ['Total Items', totalItems],
+    ['Total Weight', totalWeight.toFixed(2)],
+    ['Special Dest Trips', specialDestTrips],
+    ['Ready to Process Items', readyToProcessCount]
+  ];
+  bottomKpis.forEach(([label, value]) => {
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.innerHTML = `<h3>${label}</h3><p>${value}</p>`;
+    kpiContainer.appendChild(card);
+  });
+
+  const statusCtx = document.getElementById('statusChart').getContext('2d');
+  if (statusChart) statusChart.destroy();
+  statusChart = new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(statusCounts),
+      datasets: [{
+        data: Object.values(statusCounts),
+        backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1']
+      }]
+    }
+  });
+
+  const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(dailyCtx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(dayCounts),
+      datasets: [{
+        label: '# of Trips',
+        data: Object.values(dayCounts),
+        backgroundColor: '#4e79a7'
+      }]
+    }
+  });
+
+  const metricCtx = document.getElementById('metricChart').getContext('2d');
+  if (metricChart) metricChart.destroy();
+  metricChart = new Chart(metricCtx, {
+    type: 'line',
+    data: {
+      labels: Object.keys(dayCounts),
+      datasets: [{
+        label: 'Trips per Day',
+        data: Object.values(dayCounts),
+        borderColor: '#e15759',
+        fill: false
+      }, {
+        label: 'Items per Day',
+        data: Object.keys(dayCounts).map(day => {
+          return list
+            .filter(t => t['Ship Bundle'] === day)
+            .reduce((sum, t) => sum + (parseInt(t['Items Accepted']) || 0), 0);
+        }),
+        borderColor: '#59a14f',
+        fill: false
+      }]
+    }
+  });
+}
