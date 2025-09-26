@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shappi Warehouse Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Shappi Warehouse Dashboard</h1>
+    <div class="controls">
+      <div class="filters">
+        <label for="dateStart">From:</label>
+        <input type="date" id="dateStart" />
+        <label for="dateEnd">To:</label>
+        <input type="date" id="dateEnd" />
+        <button id="applyDateFilter">Apply</button>
+        <button id="resetDateFilter">Reset</button>
+      </div>
+      <div class="view-toggle">
+        <button id="btnGrid">Grid View</button>
+        <button id="btnList">List View</button>
+      </div>
+    </div>
+  </header>
+
+  <section id="summary-metrics">
+    <div>Total Trips: <span id="totalTrips">0</span></div>
+    <div>Total Items Accepted: <span id="totalItems">0</span></div>
+  </section>
+
+  <section id="charts-section">
+    <canvas id="statusChart" width="400" height="200"></canvas>
+  </section>
+
+  <main>
+    <!-- Grid Container -->
+    <div id="gridView" class="grid-container">
+      <div class="grid-header status-col"></div>
+      <!-- Weekday headers will be inserted dynamically -->
+      <!-- Status rows / cells will be filled dynamically -->
+    </div>
+
+    <!-- List View (hidden by default) -->
+    <div id="listView" class="list-container" style="display: none;">
+      <table>
+        <thead>
+          <tr>
+            <th>Trip ID</th><th>Traveler</th><th>Ship Bundle</th><th>Max USA Date</th>
+            <th>USA Dest</th><th>Items Accepted</th><th>Status</th><th>Items Ready</th>
+            <th>Assigned To</th>
+          </tr>
+        </thead>
+        <tbody id="listBody">
+          <!-- Rows injected here -->
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <input type="file" id="csvInput" accept=".csv" />
+    <p>Upload CSV to load trips.</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

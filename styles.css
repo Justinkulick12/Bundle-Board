@@ -1,0 +1,122 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+header {
+  background: #0073e6;
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.controls {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.filters input, .filters label, .filters button {
+  margin: 0 4px;
+}
+.view-toggle button {
+  margin: 0 4px;
+  padding: 6px 12px;
+}
+#summary-metrics {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f0f0f0;
+}
+#charts-section {
+  padding: 16px;
+  background: #fff;
+}
+.grid-container {
+  display: grid;
+  grid-template-columns: 120px repeat(5, 1fr);
+  gap: 8px;
+  padding: 16px;
+}
+.grid-header {
+  background: #ddd;
+  font-weight: bold;
+  text-align: center;
+  padding: 8px 0;
+}
+.status-col {
+  background: #ddd;
+  writing-mode: vertical-rl;
+  text-orientation: sideways;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+.cell {
+  background: #fafafa;
+  border: 1px solid #ccc;
+  position: relative;
+  overflow-y: auto;
+  min-height: 120px;
+}
+.trip-tile {
+  background: white;
+  border: 1px solid #999;
+  border-radius: 4px;
+  margin: 4px;
+  padding: 6px;
+  cursor: grab;
+  font-size: 0.9em;
+}
+.trip-tile .summary {
+  font-weight: bold;
+}
+.trip-tile .details {
+  display: none;
+  margin-top: 4px;
+  font-size: 0.85em;
+}
+.trip-tile.expanded .details {
+  display: block;
+}
+.trip-tile input.assign-input {
+  width: 100%;
+  margin-top: 4px;
+}
+.highlight-not-approved {
+  background: #fff4e5;
+}
+.highlight-dest-red {
+  background: #ffe5e5;
+}
+.highlight-trav-purple {
+  background: #f1e5ff;
+}
+.list-container {
+  padding: 16px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+table th, table td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: left;
+}
+tr.highlight-not-approved td {
+  background: #fff4e5;
+}
+tr.highlight-dest-red td {
+  background: #ffe5e5;
+}
+tr.highlight-trav-purple td {
+  background: #f1e5ff;
+}
+
+}
+.highlight-trav-purple {
+  background: #f1e5ff; /* light purple */
+}
