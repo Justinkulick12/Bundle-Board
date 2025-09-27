@@ -186,6 +186,12 @@ section {
   width: 100%;
   font-size: 0.9em;
 }
+.logo {
+  height: 40px;
+  width: auto;
+  margin-right: 10px;
+  border-radius: 8px;
+}
 
   margin-top: 0.5rem;
   width: 100%;
