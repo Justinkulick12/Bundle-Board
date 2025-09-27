@@ -1,4 +1,4 @@
-// app.js — modular Firebase + drag/drop + loading handling
+// app.js — no loading screen logic, modular Firebase + drag/drop support
 
 const db = window.firebaseDb;
 const firebaseRef = window.firebaseRef;
@@ -32,30 +32,19 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-const loadingOverlay = document.getElementById('loadingOverlay');
-
-function showLoading() {
-  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
-}
-function hideLoading() {
-  if (loadingOverlay) loadingOverlay.classList.add('hidden');
-}
-
-// Load trips from Firebase initially
+// Load trips from Firebase on start
 function loadTripsFromFirebase() {
   const tripsRef = firebaseRef(db, 'currentTrips');
-  showLoading();
   firebaseOnValue(tripsRef, snapshot => {
     const val = snapshot.val();
     if (val) {
       trips = val;
       applyDateFilter();
     }
-    hideLoading();
   });
 }
 
-// Upload the entire trips list to Firebase
+// Upload the full trips list
 function uploadTripsToFirebase(tripsList) {
   const tripsRef = firebaseRef(db, 'currentTrips');
   firebaseSet(tripsRef, tripsList)
@@ -151,8 +140,6 @@ function applyDateFilter() {
     });
   }
 
-  // NOTE: we removed forced override logic here so drag/drops can stick
-
   renderTopMetrics(filtered);
   renderTripTable(filtered);
   renderBuckets(filtered);
@@ -162,13 +149,13 @@ function applyDateFilter() {
 function renderTopMetrics(list) {
   const container = document.getElementById('top-kpi-container');
   container.innerHTML = '';
-  let total = 0, approved = 0, pending = 0, ambassadors = 0;
+  let total=0, approved=0, pending=0, ambassadors=0;
   list.forEach(trip => {
     total++;
     if (trip.currentStatus.toLowerCase() === 'tx approved') approved++;
     else pending++;
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         ambassadors++;
         break;
       }
@@ -195,11 +182,11 @@ function renderTripTable(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       tr.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
       tr.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         tr.classList.add('highlight-name');
         break;
       }
@@ -238,11 +225,11 @@ function renderBuckets(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       card.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
       card.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
+      if ((trip['Traveler']||'').includes(nm)) {
         card.classList.add('highlight-name');
         break;
       }
@@ -302,7 +289,6 @@ function initDragAndDrop() {
         if (trip) {
           trip.currentStatus = newStatus;
           uploadTripsToFirebase(trips);
-          // small delay so UI stabilizes
           setTimeout(() => {
             renderChartsAndKPIs(trips);
             renderBuckets(trips);
@@ -326,7 +312,7 @@ function renderChartsAndKPIs(list) {
     if (!isNaN(items)) totalItems += items;
     const w = parseFloat(t['Weight']);
     if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) specialDestTrips++;
+    if (SPECIAL_DESTS.has((t['USA Dest']||'').toUpperCase())) specialDestTrips++;
     if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
       readyToProcess += items || 0;
     }
@@ -402,7 +388,5 @@ function renderChartsAndKPIs(list) {
   });
 }
 
-  });
-}
 
 
