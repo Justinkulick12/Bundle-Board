@@ -1,4 +1,4 @@
-// app.js — full version with drag & drop fix (no forced status override)
+// app.js — modular Firebase + drag/drop + loading handling
 
 const db = window.firebaseDb;
 const firebaseRef = window.firebaseRef;
@@ -32,15 +32,26 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-// Load trips from Firebase
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function showLoading() {
+  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+}
+function hideLoading() {
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
+}
+
+// Load trips from Firebase initially
 function loadTripsFromFirebase() {
   const tripsRef = firebaseRef(db, 'currentTrips');
+  showLoading();
   firebaseOnValue(tripsRef, snapshot => {
     const val = snapshot.val();
     if (val) {
       trips = val;
       applyDateFilter();
     }
+    hideLoading();
   });
 }
 
@@ -140,8 +151,7 @@ function applyDateFilter() {
     });
   }
 
-  // ** We removed the logic that forcibly resets status here **
-  // That was causing snaps back.
+  // NOTE: we removed forced override logic here so drag/drops can stick
 
   renderTopMetrics(filtered);
   renderTripTable(filtered);
@@ -152,13 +162,13 @@ function applyDateFilter() {
 function renderTopMetrics(list) {
   const container = document.getElementById('top-kpi-container');
   container.innerHTML = '';
-  let total=0, approved=0, pending=0, ambassadors=0;
+  let total = 0, approved = 0, pending = 0, ambassadors = 0;
   list.forEach(trip => {
     total++;
     if (trip.currentStatus.toLowerCase() === 'tx approved') approved++;
     else pending++;
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         ambassadors++;
         break;
       }
@@ -185,11 +195,11 @@ function renderTripTable(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       tr.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
       tr.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         tr.classList.add('highlight-name');
         break;
       }
@@ -228,11 +238,11 @@ function renderBuckets(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       card.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
       card.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         card.classList.add('highlight-name');
         break;
       }
@@ -292,7 +302,7 @@ function initDragAndDrop() {
         if (trip) {
           trip.currentStatus = newStatus;
           uploadTripsToFirebase(trips);
-          // Slight delay before re-render so we don’t override
+          // small delay so UI stabilizes
           setTimeout(() => {
             renderChartsAndKPIs(trips);
             renderBuckets(trips);
@@ -316,7 +326,7 @@ function renderChartsAndKPIs(list) {
     if (!isNaN(items)) totalItems += items;
     const w = parseFloat(t['Weight']);
     if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest']||'').toUpperCase())) specialDestTrips++;
+    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) specialDestTrips++;
     if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
       readyToProcess += items || 0;
     }
@@ -348,7 +358,7 @@ function renderChartsAndKPIs(list) {
       labels: Object.keys(statusCounts),
       datasets: [{
         data: Object.values(statusCounts),
-        backgroundColor: ['#4e79a7','#f28e2c','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1']
+        backgroundColor: ['#6A00FF','#f28e2c','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1']
       }]
     }
   });
@@ -362,7 +372,7 @@ function renderChartsAndKPIs(list) {
       datasets: [{
         label: '# of Trips',
         data: Object.values(dayCounts),
-        backgroundColor: '#4e79a7'
+        backgroundColor: '#6A00FF'
       }]
     }
   });
@@ -389,6 +399,9 @@ function renderChartsAndKPIs(list) {
         fill: false
       }]
     }
+  });
+}
+
   });
 }
 
