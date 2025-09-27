@@ -1,4 +1,4 @@
-// app.js — no loading screen logic, modular Firebase + drag/drop support
+// app.js — with drag/drop highlight (bucket hover) support
 
 const db = window.firebaseDb;
 const firebaseRef = window.firebaseRef;
@@ -28,11 +28,9 @@ const SPECIAL_NAMES = new Set([
   "Wesley Triviño","Leonardo Pauta","Ornella Bloise","Erick Pauta",
   "Bruno Pagnacco","Katy Valdivieso","Eddy Vera"
 ]);
-
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-// Load trips from Firebase on start
 function loadTripsFromFirebase() {
   const tripsRef = firebaseRef(db, 'currentTrips');
   firebaseOnValue(tripsRef, snapshot => {
@@ -44,7 +42,6 @@ function loadTripsFromFirebase() {
   });
 }
 
-// Upload the full trips list
 function uploadTripsToFirebase(tripsList) {
   const tripsRef = firebaseRef(db, 'currentTrips');
   firebaseSet(tripsRef, tripsList)
@@ -127,7 +124,6 @@ function applyDateFilter() {
   const start = parseDateOnly(startDateInp.value);
   const end = parseDateOnly(endDateInp.value);
   let filtered = trips;
-
   if (start && end) {
     filtered = trips.filter(trip => {
       const bd = parseDateOnly(trip['Ship Bundle']);
@@ -139,7 +135,6 @@ function applyDateFilter() {
       return bd && bd >= start;
     });
   }
-
   renderTopMetrics(filtered);
   renderTripTable(filtered);
   renderBuckets(filtered);
@@ -149,13 +144,13 @@ function applyDateFilter() {
 function renderTopMetrics(list) {
   const container = document.getElementById('top-kpi-container');
   container.innerHTML = '';
-  let total=0, approved=0, pending=0, ambassadors=0;
+  let total = 0, approved = 0, pending = 0, ambassadors = 0;
   list.forEach(trip => {
     total++;
     if (trip.currentStatus.toLowerCase() === 'tx approved') approved++;
     else pending++;
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         ambassadors++;
         break;
       }
@@ -182,11 +177,11 @@ function renderTripTable(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       tr.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
       tr.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         tr.classList.add('highlight-name');
         break;
       }
@@ -225,11 +220,11 @@ function renderBuckets(list) {
     if (trip.currentStatus.toLowerCase() !== 'tx approved') {
       card.classList.add('red-status');
     }
-    if (SPECIAL_DESTS.has((trip['USA Dest']||'').toUpperCase())) {
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
       card.classList.add('special-dest');
     }
     for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler']||'').includes(nm)) {
+      if ((trip['Traveler'] || '').includes(nm)) {
         card.classList.add('highlight-name');
         break;
       }
@@ -280,7 +275,11 @@ function initDragAndDrop() {
         put: true
       },
       animation: 150,
+      onMove(evt) {
+        evt.to.classList.add('drag-over');
+      },
       onEnd(evt) {
+        lists.forEach(l => l.classList.remove('drag-over'));
         const card = evt.item;
         const newBucket = evt.to.closest('.bucket');
         const newStatus = newBucket.dataset.status;
@@ -312,7 +311,7 @@ function renderChartsAndKPIs(list) {
     if (!isNaN(items)) totalItems += items;
     const w = parseFloat(t['Weight']);
     if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest']||'').toUpperCase())) specialDestTrips++;
+    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) specialDestTrips++;
     if (t.currentStatus && t.currentStatus.toLowerCase().includes('pending')) {
       readyToProcess += items || 0;
     }
@@ -387,6 +386,5 @@ function renderChartsAndKPIs(list) {
     }
   });
 }
-
 
 
