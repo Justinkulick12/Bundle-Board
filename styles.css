@@ -1,23 +1,56 @@
+:root {
+  --shappi-purple: #6A00FF;
+  --shappi-purple-dark: #4500A0;
+  --shappi-bg-light: #F4F5F9;
+  --white: #FFFFFF;
+}
+
+/* Basic resets */
 body {
-  font-family: 'Segoe UI', sans-serif;
-  background: #f4f6f8;
   margin: 0;
-  padding: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: var(--shappi-bg-light);
+  color: #333;
 }
 
-header {
-  background-color: #004578;
-  color: white;
-  padding: 1rem;
-  text-align: center;
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--shappi-purple);
+  color: var(--white);
+}
+.shappi-logo {
+  height: 40px;
+  width: auto;
 }
 
+/* Loading overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.loading-overlay.hidden {
+  display: none;
+}
+.spinner {
+  font-size: 1.5rem;
+  color: var(--shappi-purple);
+}
+
+/* Sections styling */
 section {
-  padding: 1rem;
   margin: 1rem;
-  background: white;
+  padding: 1rem;
+  background: var(--white);
   border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 
 #upload-section {
@@ -28,56 +61,63 @@ section {
 }
 #date-filter {
   display: flex;
-  align-items: center;
   gap: 0.5rem;
   margin-left: 2rem;
 }
-#date-filter button[data-range] {
+#date-filter button[data-range], #applyDateFilter {
+  background-color: var(--shappi-purple);
+  color: var(--white);
+  border: none;
   padding: 0.4rem 0.8rem;
-  border: 1px solid #888;
-  background: #f0f0f0;
   cursor: pointer;
 }
-#date-filter button[data-range]:hover {
-  background: #e0e0e0;
+#date-filter button[data-range]:hover, #applyDateFilter:hover {
+  background-color: var(--shappi-purple-dark);
 }
 #date-filter input[type="date"] {
   font-size: 1.1em;
 }
 
-#legend-section {
-  margin: 0 1rem 1rem;
-}
+/* Legend */
 .legend {
   display: inline-block;
   margin-right: 1rem;
   padding: 4px 10px;
-  border: 1px solid #888;
   border-radius: 4px;
-  font-size: 0.95em;
+  border: 1px solid #888;
+  font-size: 0.9em;
 }
-.legend.red-status {
-  background-color: #ffdddd;
-}
-.legend.special-dest {
-  background-color: #fff3cc;
-}
-.legend.highlight-name {
-  background-color: #e0ccff;
-}
+.legend.red-status { background-color: #ffd4d4; }
+.legend.special-dest { background-color: #fff3cc; }
+.legend.highlight-name { background-color: #ead4ff; }
 
-#top-metrics {
-  margin: 1rem;
-}
-#top-kpi-container {
+/* KPI cards */
+#top-kpi-container, #kpi-container {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
 }
-#top-kpi-container .kpi-card {
+.kpi-card {
+  background: var(--white);
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  flex: 1;
+  min-width: 120px;
+  text-align: center;
+  font-size: 1em;
+}
+.kpi-card h3 {
+  margin: 0;
+  font-size: 1.1em;
+}
+.kpi-card p {
+  margin: 0.5rem 0 0;
   font-size: 1.3em;
-  padding: 1rem 1.5rem;
+  font-weight: bold;
 }
 
+/* Charts */
 #charts-section {
   display: flex;
   flex-wrap: wrap;
@@ -90,6 +130,7 @@ section {
   max-width: 400px;
 }
 
+/* Trip table */
 #trip-table {
   width: 100%;
   border-collapse: collapse;
@@ -103,15 +144,16 @@ section {
   background-color: #f0f8ff;
 }
 #trip-table tbody tr.red-status {
-  background-color: #ffdddd !important;
+  background-color: #ffd4d4 !important;
 }
 #trip-table tbody tr.special-dest {
   background-color: #fff3cc !important;
 }
 #trip-table tbody tr.highlight-name {
-  background-color: #e0ccff !important;
+  background-color: #ead4ff !important;
 }
 
+/* Status board & buckets */
 .bucket-container {
   display: flex;
   flex-wrap: wrap;
@@ -120,63 +162,46 @@ section {
 .bucket {
   flex: 1;
   min-width: 220px;
-  background: #f9f9f9;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  background: var(--white);
+  border: 2px solid var(--shappi-purple-dark);
+  border-radius: 8px;
   padding: 0.5rem;
 }
 .bucket h3 {
   text-align: center;
+  margin: 0.5rem 0;
 }
 .bucket-list {
   min-height: 150px;
 }
 
+/* Cards in status board */
 .card {
-  background: white;
-  border: 1px solid #ccc;
+  background: var(--white);
+  border: 1px solid var(--shappi-purple-dark);
   border-radius: 4px;
-  padding: 0.5rem;
-  margin: 0.5rem 0;
+  padding: 0.6rem;
+  margin: 0.4rem 0;
   cursor: grab;
-  font-size: 1em;
+  font-size: 0.95em;
 }
 .card.red-status {
-  background-color: #ffdddd;
+  background-color: #ffd4d4;
 }
 .card.special-dest {
   background-color: #fff3cc;
 }
 .card.highlight-name {
-  background-color: #e0ccff;
+  background-color: #ead4ff;
 }
 .card.ta-completed {
-  background-color: #cce5ff;
+  background-color: #d4eaff;
 }
 .card.bundle-completed {
-  background-color: #ccffcc;
+  background-color: #d4ffd4;
 }
 .assign-select {
   margin-top: 0.5rem;
   width: 100%;
-  font-size: 1em;
-}
-
-#kpi-container, #top-kpi-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-.kpi-card {
-  background: #e6f0ff;
-  padding: 1rem;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 1.2em;
-}
-
-
-}
-.highlight-trav-purple {
-  background: #f1e5ff; /* light purple */
+  font-size: 0.9em;
 }
