@@ -26,25 +26,6 @@ body {
   width: auto;
 }
 
-/* Loading overlay */
-.loading-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.loading-overlay.hidden {
-  display: none;
-}
-.spinner {
-  font-size: 1.5rem;
-  color: var(--shappi-purple);
-}
-
-/* Sections styling */
 section {
   margin: 1rem;
   padding: 1rem;
@@ -201,6 +182,11 @@ section {
   background-color: #d4ffd4;
 }
 .assign-select {
+  margin-top: 0.5rem;
+  width: 100%;
+  font-size: 0.9em;
+}
+
   margin-top: 0.5rem;
   width: 100%;
   font-size: 0.9em;
