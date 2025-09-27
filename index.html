@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Warehouse Trip Dashboard</title>
+  <title>Bundle Board — Shappi</title>
   <link rel="stylesheet" href="styles.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
-  <!-- Firebase modular imports -->
+  <!-- Firebase modular imports + config -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
@@ -29,7 +29,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Attach to window so app.js (module) can use it
     window.firebaseDb = db;
     window.firebaseRef = ref;
     window.firebaseSet = set;
@@ -37,8 +36,13 @@
   </script>
 </head>
 <body>
-  <header>
-    <h1>📦 Warehouse Trip Dashboard</h1>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner">Loading...</div>
+  </div>
+
+  <header class="app-header">
+    <img src="https://bundle‑board.shappi.com/assets/shappi-logo.png" alt="Shappi Logo" class="shappi-logo" />
+    <h1>Bundle Board</h1>
   </header>
 
   <main>
@@ -58,10 +62,10 @@
     </section>
 
     <section id="legend-section">
-      <strong>Color Legend: </strong>
-      <span class="legend red-status">Red = status not “TX Approved”</span>
+      <strong>Legend:</strong>
+      <span class="legend red-status">Red = Not “TX Approved”</span>
       <span class="legend special-dest">Orange = Dest in CA, NV, NJ, NY, CO, MA</span>
-      <span class="legend highlight-name">Purple = Ambassador / special name</span>
+      <span class="legend highlight-name">Purple = Ambassador</span>
     </section>
 
     <section id="top-metrics">
@@ -83,7 +87,7 @@
             <th>Items Accepted</th>
             <th>Traveler</th>
             <th>USA Dest</th>
-            <th>Trip Status</th>
+            <th>Status</th>
             <th>Ship Bundle</th>
             <th>Max USA Date</th>
           </tr>
@@ -95,30 +99,12 @@
     <section id="status-board">
       <h2>Trip Status Board</h2>
       <div class="bucket-container">
-        <div class="bucket" data-status="Pending Verification">
-          <h3>Pending Verification</h3>
-          <div class="bucket-list"></div>
-        </div>
-        <div class="bucket" data-status="TX Approved">
-          <h3>TX Approved</h3>
-          <div class="bucket-list"></div>
-        </div>
-        <div class="bucket" data-status="TA In Progress">
-          <h3>TA In Progress</h3>
-          <div class="bucket-list"></div>
-        </div>
-        <div class="bucket" data-status="TA Completed">
-          <h3>TA Completed</h3>
-          <div class="bucket-list"></div>
-        </div>
-        <div class="bucket" data-status="Bundling In Progress">
-          <h3>Bundling In Progress</h3>
-          <div class="bucket-list"></div>
-        </div>
-        <div class="bucket" data-status="Bundle Completed">
-          <h3>Bundle Completed</h3>
-          <div class="bucket-list"></div>
-        </div>
+        <div class="bucket" data-status="Pending Verification"><h3>Pending Verification</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TX Approved"><h3>TX Approved</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TA In Progress"><h3>TA In Progress</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TA Completed"><h3>TA Completed</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="Bundling In Progress"><h3>Bundling In Progress</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="Bundle Completed"><h3>Bundle Completed</h3><div class="bucket-list"></div></div>
       </div>
     </section>
 
@@ -126,7 +112,7 @@
       <div id="kpi-container"></div>
       <canvas id="statusChart" width="400" height="200"></canvas>
       <canvas id="dailyChart" width="400" height="200"></canvas>
-      <canvas id="metricChart" width="400" height= "200"></canvas>
+      <canvas id="metricChart" width="400" height="200"></canvas>
     </section>
   </main>
 
@@ -134,8 +120,4 @@
 </body>
 </html>
 
-
-  <script src="app.js"></script>
-</body>
-</html>
 
