@@ -214,7 +214,7 @@ section {
   font-size: 0.9em;
 }
 
-/* Fade‑in keyframes */
+/* Fade-in keyframes */
 @keyframes fadeInAnim {
   from {
     opacity: 0;
@@ -225,4 +225,81 @@ section {
     transform: translateY(0);
   }
 }
+
+/* ===============================
+   Sleek Trip Status Board Override
+   =============================== */
+
+/* Buckets (cleaner look) */
+.bucket {
+  background: #ffffff;
+  border: none; /* remove purple border */
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.bucket h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--shappi-purple);
+  text-align: left;
+}
+
+.bucket-list {
+  flex-grow: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Cards (sleek redesign) */
+.card {
+  border: none;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0;
+  box-shadow: 0 2px 8px rgba(63,69,81,0.16);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(63,69,81,0.25);
+}
+
+.card h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.card p {
+  margin: 2px 0;
+  font-size: 13px;
+  color: #555;
+}
+
+/* Status highlights (keep old colors, sleeker style) */
+.card.red-status {
+  border-left: 4px solid #dc3545; /* red */
+}
+.card.special-dest {
+  border-left: 4px solid #ffbf00; /* yellow */
+}
+.card.highlight-name {
+  border-left: 4px solid var(--shappi-purple); /* ambassador purple */
+}
+.card.ta-completed {
+  border-left: 4px solid #007bff; /* blue */
+}
+.card.bundle-completed {
+  border-left: 4px solid #28a745; /* green */
+}
+
 
