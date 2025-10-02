@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Trip Status Board — Bundle Board</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <!-- Firebase modular imports + config -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
+      authDomain: "bundle-board-dashboard.firebaseapp.com",
+      databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
+      projectId: "bundle-board-dashboard",
+      storageBucket: "bundle-board-dashboard.firebasestorage.app",
+      messagingSenderId: "114676418819",
+      appId: "1:114676418819:web:fd8a544213d76b56050136",
+      measurementId: "G-M2WCBZ94YS"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.firebaseDb = db;
+    window.firebaseRef = ref;
+    window.firebaseSet = set;
+    window.firebaseOnValue = onValue;
+  </script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/94/9a/4d/949a4db3-f268-4d38-b95f-da3a17ebc866/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/1200x630wa.png" alt="Shappi Icon" class="logo" />
+      <h1>Trip Status Board</h1>
+    </div>
+    <nav class="app-nav">
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="board.html" class="nav-link active">Trip Status Board</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="legend-section">
+      <strong>Legend:</strong>
+      <span class="legend red-status">Red = Not “TX Approved”</span>
+      <span class="legend special-dest">Orange = Dest in CA, NV, NJ, NY, CO, MA</span>
+      <span class="legend highlight-name">Purple = Ambassador</span>
+    </section>
+
+    <section id="status-board">
+      <h2>Collaborative Trip Tracking</h2>
+      <p>Drag and drop to update each trip's live status for the operations team.</p>
+      <div class="bucket-container">
+        <div class="bucket" data-status="Pending Verification"><h3>Pending Verification</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TX Approved"><h3>TX Approved</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TA In Progress"><h3>TA In Progress</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="TA Completed"><h3>TA Completed</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="Bundling In Progress"><h3>Bundling In Progress</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="Bundle Completed"><h3>Bundle Completed</h3><div class="bucket-list"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
