@@ -37,8 +37,14 @@
 </head>
 <body>
   <header class="app-header">
-    <img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/94/9a/4d/949a4db3-f268-4d38-b95f-da3a17ebc866/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/1200x630wa.png" alt="Shappi Icon" class="logo" />
-    <h1>Bundle Board</h1>
+    <div class="header-brand">
+      <img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/94/9a/4d/949a4db3-f268-4d38-b95f-da3a17ebc866/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/1200x630wa.png" alt="Shappi Icon" class="logo" />
+      <h1>Bundle Board</h1>
+    </div>
+    <nav class="app-nav">
+      <a href="index.html" class="nav-link active">Dashboard</a>
+      <a href="board.html" class="nav-link">Trip Status Board</a>
+    </nav>
   </header>
 
   <main>
@@ -68,6 +74,11 @@
       <div id="top-kpi-container"></div>
     </section>
 
+    <section id="dashboard-kpis">
+      <h2>Operations KPIs</h2>
+      <div id="kpi-container"></div>
+    </section>
+
     <section id="charts-section">
       <div class="chart-container"><canvas id="statusChart"></canvas></div>
       <div class="chart-container"><canvas id="dailyChart"></canvas></div>
@@ -91,32 +102,7 @@
         <tbody></tbody>
       </table>
     </section>
-
-    <section id="status-board">
-      <h2>Trip Status Board</h2>
-      <div class="bucket-container">
-        <div class="bucket" data-status="Pending Verification"><h3>Pending Verification</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TX Approved"><h3>TX Approved</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TA In Progress"><h3>TA In Progress</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TA Completed"><h3>TA Completed</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="Bundling In Progress"><h3>Bundling In Progress</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="Bundle Completed"><h3>Bundle Completed</h3><div class="bucket-list"></div></div>
-      </div>
-    </section>
-
-    <section id="dashboard-charts">
-      <div id="kpi-container"></div>
-      <canvas id="statusChart" width="400" height="200"></canvas>
-      <canvas id="dailyChart" width="400" height="200"></canvas>
-      <canvas id="metricChart" width="400" height="200"></canvas>
-    </section>
-  </main>
-
-  <script type="module" src="app.js"></script>
-</body>
-</html>
-
-</html>
+    
 
   <script type="module" src="app.js"></script>
 </body>
