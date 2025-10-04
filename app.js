@@ -38,6 +38,15 @@ const drawerSubtitle = detailsDrawer ? detailsDrawer.querySelector('[data-drawer
 const drawerBody = detailsDrawer ? detailsDrawer.querySelector('.details-body') : null;
 const drawerCloseBtn = detailsDrawer ? detailsDrawer.querySelector('.drawer-close') : null;
 const drawerStageButtons = detailsDrawer ? detailsDrawer.querySelectorAll('.stage-btn') : [];
+const createTripBtn = document.getElementById('createTripBtn');
+const createTripModal = document.getElementById('createTripModal');
+const createTripForm = document.getElementById('createTripForm');
+const createTripStageSelect = document.getElementById('createTripStage');
+const createTripVerificationSelect = document.getElementById('createTripVerification');
+const createTripAssigneeSelect = document.getElementById('createTripAssignee');
+const createTripCloseEls = createTripModal ? createTripModal.querySelectorAll('[data-close]') : [];
+const createTripBackdrop = createTripModal ? createTripModal.querySelector('.modal-backdrop') : null;
+const createTripTripIdInput = createTripForm ? createTripForm.querySelector('input[name="tripId"]') : null;
 
 function normalizeTrip(rawTrip = {}) {
   const originalStatus = rawTrip.originalStatus
@@ -57,13 +66,211 @@ function normalizeTrip(rawTrip = {}) {
   };
 }
 
+const TRIP_VERIFICATION_STATUSES = [
+  'Pending Verification',
+  'TX Approved',
+  'TA In Progress',
+  'TA Completed',
+  'Bundling In Progress',
+  'Bundle Completed'
+];
+
 const SPECIAL_NAMES = new Set([
   "Gabriela","Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise",
   "Genesis Ronquillo","Martha Aguirre","Paola Salcan","Karen Chapman",
   "Daniel Molineros","Veronica Endara","Delia Vera","Milton Jijon",
   "Kenia Jimenez","Carlos Matute","Andrea Martinez","Delicia Rodriguez",
   "Mendez","Vuelo de carga","Daniel Lliguicota","Romina Campodonico",
-@@ -105,100 +129,238 @@ if (csvUpload) {
+  "Jeampiero","Isabella Piedrahita","Juan C Chevrasco","Nicole Matamoros",
+  "Fabricio Triviño","Freddy Arboleda","David Muzzio","Ruliova",
+  "Darwin Parrales","Eva Novotona","Jorge Alejandro","Josue Alejandro",
+  "Betty Lastre","Priscila Alejandro","Jeniffer Zambrano","Alison Fajardo",
+  "Wesley Triviño","Leonardo Pauta","Ornella Bloise","Erick Pauta",
+  "Bruno Pagnacco","Katy Valdivieso","Eddy Vera"
+]);
+const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
+const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
+
+function loadTripsFromFirebase() {
+  const tripsRef = firebaseRef(db, 'currentTrips');
+  firebaseOnValue(tripsRef, snapshot => {
+    const val = snapshot.val();
+    let incoming = [];
+    if (Array.isArray(val)) {
+      incoming = val.filter(Boolean);
+    } else if (val && typeof val === 'object') {
+      incoming = Object.values(val);
+    }
+    trips = incoming.map(normalizeTrip);
+    applyDateFilter();
+  });
+}
+
+function hydrateCreateTripFormControls() {
+  if (createTripStageSelect) {
+    createTripStageSelect.innerHTML = PIPELINE_STATUSES.map((status, idx) => {
+      const selectedAttr = idx === 0 ? ' selected' : '';
+      return `<option value="${status}"${selectedAttr}>${status}</option>`;
+    }).join('');
+  }
+  if (createTripVerificationSelect) {
+    createTripVerificationSelect.innerHTML = TRIP_VERIFICATION_STATUSES.map((status, idx) => {
+      const selectedAttr = idx === 0 ? ' selected' : '';
+      return `<option value="${status}"${selectedAttr}>${status}</option>`;
+    }).join('');
+  }
+  if (createTripAssigneeSelect) {
+    const options = ['<option value="">Unassigned</option>'];
+    ASSIGNEES.forEach(name => {
+      options.push(`<option value="${name}">${name}</option>`);
+    });
+    createTripAssigneeSelect.innerHTML = options.join('');
+  }
+}
+
+function resetCreateTripForm() {
+  if (!createTripForm) return;
+  createTripForm.reset();
+  if (createTripStageSelect && PIPELINE_STATUSES.length) {
+    createTripStageSelect.value = PIPELINE_STATUSES[0];
+  }
+  if (createTripVerificationSelect && TRIP_VERIFICATION_STATUSES.length) {
+    createTripVerificationSelect.value = TRIP_VERIFICATION_STATUSES[0];
+  }
+  if (createTripAssigneeSelect) {
+    createTripAssigneeSelect.value = '';
+  }
+}
+
+function openCreateTripModal() {
+  if (!createTripModal) return;
+  hydrateCreateTripFormControls();
+  resetCreateTripForm();
+  createTripModal.classList.add('open');
+  createTripModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  if (createTripTripIdInput) {
+    setTimeout(() => {
+      createTripTripIdInput.focus();
+    }, 50);
+  }
+}
+
+function closeCreateTripModal() {
+  if (!createTripModal) return;
+  createTripModal.classList.remove('open');
+  createTripModal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+function handleCreateTripSubmit(evt) {
+  if (!createTripForm) return;
+  evt.preventDefault();
+  const formData = new FormData(createTripForm);
+  const tripId = String(formData.get('tripId') || '').trim();
+  if (!tripId) {
+    alert('Trip ID is required to create a trip.');
+    return;
+  }
+  const traveler = String(formData.get('traveler') || '').trim();
+  const destination = String(formData.get('usaDest') || '').trim();
+  const shipBundle = String(formData.get('shipBundle') || '').trim();
+  const itemsAccepted = String(formData.get('itemsAccepted') || '').trim();
+  const weight = String(formData.get('weight') || '').trim();
+  const verificationStatus = String(formData.get('verificationStatus') || '').trim() || 'Pending Verification';
+  const boardStatus = String(formData.get('boardStatus') || '').trim() || verificationStatus || 'Pending Verification';
+  const assignedTo = String(formData.get('assignedTo') || '').trim();
+  const notes = String(formData.get('notes') || '').trim();
+
+  const existingIndex = trips.findIndex(t => String(t['Trip ID']) === tripId);
+  const existingTrip = existingIndex >= 0 ? trips[existingIndex] : null;
+
+  const baseTrip = {
+    'Trip ID': tripId,
+    'Traveler': traveler,
+    'USA Dest': destination,
+    'Ship Bundle': shipBundle,
+    'Items Accepted': itemsAccepted,
+    'Weight': weight,
+    'Trip Verification Status': verificationStatus,
+    'Notes': notes || (existingTrip ? (existingTrip['Notes'] || existingTrip['Internal Notes'] || '') : ''),
+    'Internal Notes': notes || (existingTrip ? existingTrip['Internal Notes'] || existingTrip['Notes'] || '' : '')
+  };
+
+  const normalized = normalizeTrip({
+    ...existingTrip,
+    ...baseTrip,
+    originalStatus: verificationStatus || (existingTrip ? existingTrip.originalStatus : 'Pending Verification'),
+    boardStatus,
+    assignedTo: assignedTo || (existingTrip ? existingTrip.assignedTo : '')
+  });
+
+  if (existingIndex >= 0) {
+    trips.splice(existingIndex, 1, normalized);
+  } else {
+    trips.push(normalized);
+  }
+
+  uploadTripsToFirebase(trips);
+  applyDateFilter();
+  closeCreateTripModal();
+}
+
+function uploadTripsToFirebase(tripsList) {
+  const tripsRef = firebaseRef(db, 'currentTrips');
+  firebaseSet(tripsRef, tripsList)
+    .catch(err => console.error("Firebase write error:", err));
+}
+
+if (csvUpload) {
+  csvUpload.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete(results) {
+          const data = results.data;
+          const existingTripsMap = new Map(
+            trips.map(t => [String(t['Trip ID']), normalizeTrip(t)])
+          );
+
+          trips = data.map(row => {
+          const refreshedTrips = [];
+          data.forEach(row => {
+            const tripId = String(row['Trip ID'] || '').trim();
+            if (!tripId) return;
+            const existing = existingTripsMap.get(tripId);
+            const originalStatus = row['Trip Verification Status'] || 'Pending Verification';
+            const csvNotes = typeof row['Notes'] === 'string' ? row['Notes'].trim() : '';
+            const csvInternalNotes = typeof row['Internal Notes'] === 'string' ? row['Internal Notes'].trim() : '';
+            const noteValue = csvNotes
+              ? row['Notes']
+              : (existing ? (existing['Notes'] || existing['Internal Notes'] || '') : '');
+            const internalNoteValue = csvInternalNotes
+              ? row['Internal Notes']
+              : (existing ? (existing['Internal Notes'] || existing['Notes'] || '') : '');
+            const normalized = normalizeTrip({
+              ...row,
+              originalStatus,
+              boardStatus: existing ? existing.boardStatus : originalStatus,
+              assignedTo: existing ? existing.assignedTo : ''
+              assignedTo: existing ? existing.assignedTo : '',
+              Notes: noteValue,
+              'Internal Notes': internalNoteValue
+            });
+            return normalized;
+            refreshedTrips.push(normalized);
+          });
+
+          trips = refreshedTrips;
+          uploadTripsToFirebase(trips);
+          applyDateFilter();
+          csvUpload.value = '';
+        }
+      });
+    }
+  });
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -130,6 +337,38 @@ if (detailsDrawer) {
 drawerStageButtons.forEach(btn => {
   btn.addEventListener('click', handleStageButtonClick);
 });
+
+if (createTripBtn) {
+  createTripBtn.addEventListener('click', () => {
+    openCreateTripModal();
+  });
+}
+
+if (createTripForm) {
+  hydrateCreateTripFormControls();
+  resetCreateTripForm();
+  createTripForm.addEventListener('submit', handleCreateTripSubmit);
+}
+
+if (createTripBackdrop) {
+  createTripBackdrop.addEventListener('click', () => {
+    closeCreateTripModal();
+  });
+}
+
+createTripCloseEls.forEach(el => {
+  el.addEventListener('click', () => {
+    closeCreateTripModal();
+  });
+});
+
+if (createTripModal) {
+  document.addEventListener('keydown', evt => {
+    if (evt.key === 'Escape' && createTripModal.classList.contains('open')) {
+      closeCreateTripModal();
+    }
+  });
+}
 
 function parseDateOnly(str) {
   if (!str) return null;
@@ -302,7 +541,7 @@ function renderTopMetrics(list) {
   const metrics = [
     ['Total Trips', total],
     ['Total Approved', approved],
-@@ -230,136 +392,281 @@ function renderTripTable(list) {
+@@ -230,136 +566,281 @@ function renderTripTable(list) {
         break;
       }
     }
@@ -328,6 +567,10 @@ function renderTopMetrics(list) {
   });
 }
 
+function renderBuckets(list) {
+  const bucketLists = document.querySelectorAll('.bucket-list');
+  if (!bucketLists.length) return;
+  bucketLists.forEach(b => b.innerHTML = '');
 function renderBoardSummary(list = currentFilteredList.length ? currentFilteredList : trips) {
   if (!boardSummaryContainer) return;
   const activeList = Array.isArray(list) ? list : [];
@@ -412,6 +655,7 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     }
   });
 
+  list.forEach(trip => {
   boardList.forEach(trip => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -451,6 +695,10 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     const shipDate = trip['Ship Bundle'] ? `Ship ${trip['Ship Bundle']}` : 'Ship date TBD';
 
     card.innerHTML = `
+      <strong>${trip['Trip ID']}</strong><br>
+      ${trip['Traveler']}<br>
+      ${trip['Ship Bundle']}<br>
+      <select class="assign-select">${opts}</select>
       <div class="card-header">
         <span class="card-id">#${trip['Trip ID'] || '—'}</span>
         <span class="card-items">${itemsText}</span>
@@ -483,6 +731,9 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     });
 
     const boardStatus = trip.boardStatus || 'Pending Verification';
+    const bucket = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
+    if (bucket) bucket.appendChild(card);
+    else {
     const bucketList = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
     if (bucketList) {
       bucketList.appendChild(card);
@@ -547,6 +798,7 @@ function initDragAndDrop() {
         evt.to.classList.add('drag-over');
       },
       onEnd(evt) {
+        lists.forEach(l => l.classList.remove('drag-over'));
         document.querySelectorAll('.bucket-list').forEach(l => l.classList.remove('drag-over'));
         const card = evt.item;
         const newBucket = evt.to.closest('.bucket');
@@ -557,6 +809,8 @@ function initDragAndDrop() {
           trip.boardStatus = newStatus;
           uploadTripsToFirebase(trips);
           setTimeout(() => {
+            renderChartsAndKPIs(trips);
+            renderBuckets(trips);
             renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
             renderBuckets();
           }, 200);
