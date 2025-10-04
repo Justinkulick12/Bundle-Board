@@ -235,7 +235,6 @@ if (csvUpload) {
             trips.map(t => [String(t['Trip ID']), normalizeTrip(t)])
           );
 
-          trips = data.map(row => {
           const refreshedTrips = [];
           data.forEach(row => {
             const tripId = String(row['Trip ID'] || '').trim();
@@ -254,12 +253,10 @@ if (csvUpload) {
               ...row,
               originalStatus,
               boardStatus: existing ? existing.boardStatus : originalStatus,
-              assignedTo: existing ? existing.assignedTo : ''
               assignedTo: existing ? existing.assignedTo : '',
               Notes: noteValue,
               'Internal Notes': internalNoteValue
             });
-            return normalized;
             refreshedTrips.push(normalized);
           });
 
@@ -567,10 +564,6 @@ function renderTopMetrics(list) {
   });
 }
 
-function renderBuckets(list) {
-  const bucketLists = document.querySelectorAll('.bucket-list');
-  if (!bucketLists.length) return;
-  bucketLists.forEach(b => b.innerHTML = '');
 function renderBoardSummary(list = currentFilteredList.length ? currentFilteredList : trips) {
   if (!boardSummaryContainer) return;
   const activeList = Array.isArray(list) ? list : [];
@@ -655,7 +648,6 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     }
   });
 
-  list.forEach(trip => {
   boardList.forEach(trip => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -695,10 +687,6 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     const shipDate = trip['Ship Bundle'] ? `Ship ${trip['Ship Bundle']}` : 'Ship date TBD';
 
     card.innerHTML = `
-      <strong>${trip['Trip ID']}</strong><br>
-      ${trip['Traveler']}<br>
-      ${trip['Ship Bundle']}<br>
-      <select class="assign-select">${opts}</select>
       <div class="card-header">
         <span class="card-id">#${trip['Trip ID'] || '—'}</span>
         <span class="card-items">${itemsText}</span>
@@ -731,9 +719,6 @@ function renderBuckets(list = currentFilteredList.length ? currentFilteredList :
     });
 
     const boardStatus = trip.boardStatus || 'Pending Verification';
-    const bucket = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
-    if (bucket) bucket.appendChild(card);
-    else {
     const bucketList = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
     if (bucketList) {
       bucketList.appendChild(card);
@@ -798,7 +783,6 @@ function initDragAndDrop() {
         evt.to.classList.add('drag-over');
       },
       onEnd(evt) {
-        lists.forEach(l => l.classList.remove('drag-over'));
         document.querySelectorAll('.bucket-list').forEach(l => l.classList.remove('drag-over'));
         const card = evt.item;
         const newBucket = evt.to.closest('.bucket');
@@ -809,8 +793,6 @@ function initDragAndDrop() {
           trip.boardStatus = newStatus;
           uploadTripsToFirebase(trips);
           setTimeout(() => {
-            renderChartsAndKPIs(trips);
-            renderBuckets(trips);
             renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
             renderBuckets();
           }, 200);
