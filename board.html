@@ -30,7 +30,7 @@
     const db = getDatabase(app);
 
     window.firebaseDb = db;
-    window.firebaseRef = ref;
+window.firebaseRef = ref;
     window.firebaseSet = set;
     window.firebaseOnValue = onValue;
   </script>
@@ -55,19 +55,124 @@
       <span class="legend highlight-name">Purple = Ambassador</span>
     </section>
 
-    <section id="status-board">
-      <h2>Collaborative Trip Tracking</h2>
-      <p>Drag and drop to update each trip's live status for the operations team.</p>
+    <section id="status-board" class="pipeline">
+      <div class="pipeline-header">
+        <div>
+          <h2>Trips Pipeline</h2>
+          <p>Drag and drop to update each trip's live status for the operations team.</p>
+        </div>
+        <div class="pipeline-actions">
+          <label class="search-field">
+            <span class="visually-hidden">Search trips</span>
+            <input type="search" id="boardSearch" placeholder="Search trips, travelers or destinations" />
+          </label>
+          <button type="button" id="clearBoardSearch" class="ghost-button">Clear</button>
+        </div>
+      </div>
+
+      <div id="board-summary" class="board-summary"></div>
+
       <div class="bucket-container">
-        <div class="bucket" data-status="Pending Verification"><h3>Pending Verification</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TX Approved"><h3>TX Approved</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TA In Progress"><h3>TA In Progress</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="TA Completed"><h3>TA Completed</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="Bundling In Progress"><h3>Bundling In Progress</h3><div class="bucket-list"></div></div>
-        <div class="bucket" data-status="Bundle Completed"><h3>Bundle Completed</h3><div class="bucket-list"></div></div>
+        <div class="bucket" data-status="Pending Verification">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">Pending Verification</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TX Approved">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">TX Approved</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TA In Progress">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">TA In Progress</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="TA Completed">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">TA Completed</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="Bundling In Progress">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">Bundling In Progress</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
+        <div class="bucket" data-status="Bundle Completed">
+          <div class="bucket-header">
+            <div class="bucket-title">
+              <span class="bucket-name">Bundle Completed</span>
+              <span class="bucket-count" data-stage-count>0 Trips</span>
+            </div>
+            <div class="bucket-metrics">
+              <span data-stage-items>0 Items</span>
+              <span data-stage-weight>0 lbs</span>
+            </div>
+          </div>
+          <div class="bucket-list"></div>
+        </div>
       </div>
     </section>
   </main>
+
+  <div id="detailsBackdrop" class="drawer-backdrop"></div>
+  <aside id="detailsDrawer" class="details-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <span class="drawer-stage" data-drawer-stage></span>
+        <h3 data-drawer-trip></h3>
+        <p data-drawer-subtitle></p>
+      </div>
+      <button type="button" class="drawer-close" aria-label="Close trip details">&times;</button>
+    </div>
+    <div class="drawer-actions">
+      <button type="button" class="stage-btn" data-action="prev-stage">Move Back</button>
+      <button type="button" class="stage-btn primary" data-action="next-stage">Advance Stage</button>
+    </div>
+    <div class="drawer-body">
+      <div class="details-body"></div>
+    </div>
+  </aside>
 
   <script type="module" src="app.js"></script>
 </body>
