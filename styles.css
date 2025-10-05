@@ -740,3 +740,7 @@ body.drawer-open {
     text-align: left;
   }
 }
+  .detail-row span.value {
+    text-align: left;
+  }
+}
