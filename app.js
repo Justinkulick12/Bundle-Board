@@ -1,8 +1,5 @@
 // app.js — with drag/drop highlight (bucket hover) support
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
   authDomain: "bundle-board-dashboard.firebaseapp.com",
@@ -16,17 +13,49 @@ const firebaseConfig = {
 
 let firebaseDb = null;
 let firebaseReady = false;
+let firebaseInitPromise = null;
+let firebaseApi = { ref: null, set: null, onValue: null };
 
-try {
-  const firebaseApp = initializeApp(firebaseConfig);
-  firebaseDb = getDatabase(firebaseApp);
-  firebaseReady = true;
-} catch (err) {
-  console.warn('Firebase initialization failed, falling back to local storage.', err);
+async function ensureFirebaseInitialized() {
+  if (firebaseReady && firebaseDb && firebaseApi.ref && firebaseApi.set && firebaseApi.onValue) {
+    return true;
+  }
+
+  if (firebaseInitPromise) {
+    return firebaseInitPromise;
+  }
+
+  firebaseInitPromise = (async () => {
+    try {
+      const [{ initializeApp }, { getDatabase, ref, set, onValue }] = await Promise.all([
+        import('https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js')
+      ]);
+
+      const firebaseApp = initializeApp(firebaseConfig);
+      firebaseDb = getDatabase(firebaseApp);
+      firebaseApi = { ref, set, onValue };
+      firebaseReady = true;
+      return true;
+    } catch (err) {
+      console.warn('Firebase initialization failed, falling back to local storage.', err);
+      firebaseDb = null;
+      firebaseApi = { ref: null, set: null, onValue: null };
+      firebaseReady = false;
+      return false;
+    } finally {
+      if (!firebaseReady) {
+        firebaseInitPromise = null;
+      }
+    }
+  })();
+
+  return firebaseInitPromise;
 }
 
 let trips = [];
 let statusChart, dailyChart, metricChart;
+let firebaseSubscriptionActive = false;
 
 const LOCAL_STORAGE_KEY = 'bundle-board::currentTrips';
 
@@ -135,13 +164,18 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-function hydrateTripsFromFirebase() {
-  if (!firebaseReady || !firebaseDb) {
+async function hydrateTripsFromFirebase() {
+  const ready = await ensureFirebaseInitialized();
+  if (!ready || !firebaseDb || !firebaseApi.ref || !firebaseApi.onValue) {
     return false;
   }
 
-  const tripsRef = ref(firebaseDb, 'currentTrips');
-  onValue(tripsRef, snapshot => {
+  if (firebaseSubscriptionActive) {
+    return true;
+  }
+
+  const tripsRef = firebaseApi.ref(firebaseDb, 'currentTrips');
+  firebaseApi.onValue(tripsRef, snapshot => {
     const val = snapshot.val();
     let incoming = [];
     if (Array.isArray(val)) {
@@ -155,9 +189,14 @@ function hydrateTripsFromFirebase() {
   }, error => {
     console.error('Firebase realtime subscription failed, switching to local storage.', error);
     firebaseReady = false;
+    firebaseSubscriptionActive = false;
+    firebaseDb = null;
+    firebaseApi = { ref: null, set: null, onValue: null };
+    firebaseInitPromise = null;
     loadTripsFromLocalCache();
   });
 
+  firebaseSubscriptionActive = true;
   return true;
 }
 
@@ -278,13 +317,15 @@ function handleCreateTripSubmit(evt) {
 
 function uploadTripsToFirebase(tripsList) {
   persistTripsLocally(tripsList);
-  if (!firebaseReady || !firebaseDb) {
-    return;
-  }
-  const tripsRef = ref(firebaseDb, 'currentTrips');
-  set(tripsRef, tripsList).catch(err => {
-    console.error('Firebase write error, keeping local cache only.', err);
-    firebaseReady = false;
+  ensureFirebaseInitialized().then(() => {
+    if (!firebaseReady || !firebaseDb || !firebaseApi.ref || !firebaseApi.set) {
+      return;
+    }
+    const tripsRef = firebaseApi.ref(firebaseDb, 'currentTrips');
+    firebaseApi.set(tripsRef, tripsList).catch(err => {
+      console.error('Firebase write error, keeping local cache only.', err);
+      firebaseReady = false;
+    });
   });
 }
 
@@ -292,6 +333,10 @@ if (csvUpload) {
   csvUpload.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) {
+      if (typeof Papa === 'undefined') {
+        console.error('CSV upload attempted but PapaParse is unavailable.');
+        return;
+      }
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -336,8 +381,9 @@ if (csvUpload) {
   });
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (!hydrateTripsFromFirebase()) {
+window.addEventListener('DOMContentLoaded', async () => {
+  const hydrated = await hydrateTripsFromFirebase();
+  if (!hydrated) {
     loadTripsFromLocalCache();
   }
 });
@@ -606,7 +652,7 @@ function renderTopMetrics(list) {
   const metrics = [
     ['Total Trips', total],
     ['Total Approved', approved],
-@@ -230,136 +634,281 @@ function renderTripTable(list) {
+@@ -230,136 +680,281 @@ function renderTripTable(list) {
         break;
       }
     }
@@ -888,7 +934,6 @@ function renderChartsAndKPIs(list) {
     statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
     const bd = t['Ship Bundle'];
     if (bd) dayCounts[bd] = (dayCounts[bd] || 0) + 1;
-  }
-}
+
 
 
