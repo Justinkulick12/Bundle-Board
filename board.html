@@ -9,31 +9,6 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
-  <!-- Firebase modular imports + config -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
-      authDomain: "bundle-board-dashboard.firebaseapp.com",
-      databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
-      projectId: "bundle-board-dashboard",
-      storageBucket: "bundle-board-dashboard.firebasestorage.app",
-      messagingSenderId: "114676418819",
-      appId: "1:114676418819:web:fd8a544213d76b56050136",
-      measurementId: "G-M2WCBZ94YS"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    window.firebaseDb = db;
-window.firebaseRef = ref;
-    window.firebaseSet = set;
-    window.firebaseOnValue = onValue;
-  </script>
 </head>
 <body>
   <header class="app-header">
@@ -236,6 +211,11 @@ window.firebaseRef = ref;
       </form>
     </div>
   </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
 
   <script type="module" src="app.js"></script>
 </body>
