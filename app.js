@@ -1,12 +1,34 @@
 // app.js — with drag/drop highlight (bucket hover) support
 
-const db = window.firebaseDb;
-const firebaseRef = window.firebaseRef;
-const firebaseSet = window.firebaseSet;
-const firebaseOnValue = window.firebaseOnValue;
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
+  authDomain: "bundle-board-dashboard.firebaseapp.com",
+  databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
+  projectId: "bundle-board-dashboard",
+  storageBucket: "bundle-board-dashboard.firebasestorage.app",
+  messagingSenderId: "114676418819",
+  appId: "1:114676418819:web:fd8a544213d76b56050136",
+  measurementId: "G-M2WCBZ94YS"
+};
+
+let firebaseDb = null;
+let firebaseReady = false;
+
+try {
+  const firebaseApp = initializeApp(firebaseConfig);
+  firebaseDb = getDatabase(firebaseApp);
+  firebaseReady = true;
+} catch (err) {
+  console.warn('Firebase initialization failed, falling back to local storage.', err);
+}
 
 let trips = [];
 let statusChart, dailyChart, metricChart;
+
+const LOCAL_STORAGE_KEY = 'bundle-board::currentTrips';
 
 const PIPELINE_STATUSES = [
   'Pending Verification',
@@ -66,6 +88,28 @@ function normalizeTrip(rawTrip = {}) {
   };
 }
 
+function readTripsFromLocalStorage() {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeTrip);
+    }
+  } catch (err) {
+    console.warn('Unable to read trips from local storage.', err);
+  }
+  return [];
+}
+
+function persistTripsLocally(list) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+  } catch (err) {
+    console.warn('Unable to persist trips locally.', err);
+  }
+}
+
 const TRIP_VERIFICATION_STATUSES = [
   'Pending Verification',
   'TX Approved',
@@ -91,9 +135,13 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-function loadTripsFromFirebase() {
-  const tripsRef = firebaseRef(db, 'currentTrips');
-  firebaseOnValue(tripsRef, snapshot => {
+function hydrateTripsFromFirebase() {
+  if (!firebaseReady || !firebaseDb) {
+    return false;
+  }
+
+  const tripsRef = ref(firebaseDb, 'currentTrips');
+  onValue(tripsRef, snapshot => {
     const val = snapshot.val();
     let incoming = [];
     if (Array.isArray(val)) {
@@ -102,8 +150,20 @@ function loadTripsFromFirebase() {
       incoming = Object.values(val);
     }
     trips = incoming.map(normalizeTrip);
+    persistTripsLocally(trips);
     applyDateFilter();
+  }, error => {
+    console.error('Firebase realtime subscription failed, switching to local storage.', error);
+    firebaseReady = false;
+    loadTripsFromLocalCache();
   });
+
+  return true;
+}
+
+function loadTripsFromLocalCache() {
+  trips = readTripsFromLocalStorage();
+  applyDateFilter();
 }
 
 function hydrateCreateTripFormControls() {
@@ -217,9 +277,15 @@ function handleCreateTripSubmit(evt) {
 }
 
 function uploadTripsToFirebase(tripsList) {
-  const tripsRef = firebaseRef(db, 'currentTrips');
-  firebaseSet(tripsRef, tripsList)
-    .catch(err => console.error("Firebase write error:", err));
+  persistTripsLocally(tripsList);
+  if (!firebaseReady || !firebaseDb) {
+    return;
+  }
+  const tripsRef = ref(firebaseDb, 'currentTrips');
+  set(tripsRef, tripsList).catch(err => {
+    console.error('Firebase write error, keeping local cache only.', err);
+    firebaseReady = false;
+  });
 }
 
 if (csvUpload) {
@@ -271,7 +337,9 @@ if (csvUpload) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  loadTripsFromFirebase();
+  if (!hydrateTripsFromFirebase()) {
+    loadTripsFromLocalCache();
+  }
 });
 
 if (applyDateFilterBtn) {
@@ -538,7 +606,7 @@ function renderTopMetrics(list) {
   const metrics = [
     ['Total Trips', total],
     ['Total Approved', approved],
-@@ -230,136 +566,281 @@ function renderTripTable(list) {
+@@ -230,136 +634,281 @@ function renderTripTable(list) {
         break;
       }
     }
@@ -820,90 +888,6 @@ function renderChartsAndKPIs(list) {
     statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
     const bd = t['Ship Bundle'];
     if (bd) dayCounts[bd] = (dayCounts[bd] || 0) + 1;
-    const items = parseInt(t['Items Accepted']);
-    if (!isNaN(items)) totalItems += items;
-    const w = parseFloat(t['Weight']);
-    if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) specialDestTrips++;
-    if ((t.originalStatus || '').toLowerCase().includes('pending')) {
-      readyToProcess += items || 0;
-    }
-  });
-
-  const totalTrips = list.length;
-
-  if (kpiContainer) {
-    kpiContainer.innerHTML = '';
-    const bottomKpis = [
-      ['Total Trips', totalTrips],
-      ['Total Items', totalItems],
-      ['Total Weight', totalWeight.toFixed(2)],
-      ['Special Dest Trips', specialDestTrips],
-      ['Ready to Process Items', readyToProcess]
-    ];
-    bottomKpis.forEach(([label, value]) => {
-      const card = document.createElement('div');
-      card.className = 'kpi-card';
-      card.innerHTML = `<h3>${label}</h3><p>${value}</p>`;
-      kpiContainer.appendChild(card);
-    });
-  }
-
-  if (statusCanvas) {
-    const statusCtx = statusCanvas.getContext('2d');
-    if (statusChart) statusChart.destroy();
-    statusChart = new Chart(statusCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(statusCounts),
-        datasets: [{
-          data: Object.values(statusCounts),
-          backgroundColor: ['#6A00FF','#f28e2c','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1']
-        }]
-      }
-    });
-  }
-
-  if (dailyCanvas) {
-    const dailyCtx = dailyCanvas.getContext('2d');
-    if (dailyChart) dailyChart.destroy();
-    dailyChart = new Chart(dailyCtx, {
-      type: 'bar',
-      data: {
-        labels: Object.keys(dayCounts),
-        datasets: [{
-          label: '# of Trips',
-          data: Object.values(dayCounts),
-          backgroundColor: '#6A00FF'
-        }]
-      }
-    });
-  }
-
-  if (metricCanvas) {
-    const metricCtx = metricCanvas.getContext('2d');
-    if (metricChart) metricChart.destroy();
-    metricChart = new Chart(metricCtx, {
-      type: 'line',
-      data: {
-        labels: Object.keys(dayCounts),
-        datasets: [{
-          label: 'Trips per Day',
-          data: Object.values(dayCounts),
-          borderColor: '#e15759',
-          fill: false
-        },{
-          label: 'Items per Day',
-          data: Object.keys(dayCounts).map(day => {
-            return list
-              .filter(t => t['Ship Bundle'] === day)
-              .reduce((sum, t) => sum + (parseInt(t['Items Accepted']) || 0), 0);
-          }),
-          borderColor: '#59a14f',
-          fill: false
-        }]
-      }
-    });
   }
 }
 
