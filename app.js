@@ -1,309 +1,586 @@
-// Constants
-const STATES_RED = new Set(["NY","NJ","CA","MA","NV","OR"]);
-const TRAVELER_PURPLE = new Set([
-  "Gabriela Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise","Genesis Ronquillo",
-  "Martha Aguirre","Paola Salcan","Karen Chapman","Daniel Molineros","Anto",
-  "Veronica Endara","Delia Vera","Milton Jijon","Kenia Jimenez","Carlos Matute",
-  "Andrea Martinez","Delicia Rodriguez Mendez","Genesis Ronquillo - Vuelo de carga",
-  "Daniel Lliguicota","Romina Campodonico + Jeampiero","Isabella Piedrahita",
-  "Juan C Chevrasco","Nicole Matamoros","Fabricio Triviño","Freddy Arboleda",
-  "David Muzzio Ruliova","Santiago Ruliova","Betty Lastre","Priscila Alejandro",
-  "Jeniffer Zambrano","Alison Fajardo","Wesley Triviño","Leonardo Pauta",
-  "Erick Pauta","Dario Pauta","Diana Pauta","Jorge Ivan Alejandro","Ana Belen Alejandro",
-  "Bruno Pagnacco","Katy Valdivieso","Eddy Vera","Ericka Pluas","Domenica Pluas"
-]);
+// app.js — with drag/drop highlight (bucket hover) support
 
-let allTrips = [];
+const db = window.firebaseDb;
+const firebaseRef = window.firebaseRef;
+const firebaseSet = window.firebaseSet;
+const firebaseOnValue = window.firebaseOnValue;
 
-// Save / load trip state (status, assignedName) in localStorage
-function saveTripState(tripId, field, value) {
-  const key = `tripState_${tripId}`;
-  let obj = JSON.parse(localStorage.getItem(key) || "{}");
-  obj[field] = value;
-  localStorage.setItem(key, JSON.stringify(obj));
-}
-function loadTripState(tripId) {
-  return JSON.parse(localStorage.getItem(`tripState_${tripId}`) || "{}");
+let trips = [];
+let statusChart, dailyChart, metricChart;
+
+const PIPELINE_STATUSES = [
+  'Pending Verification',
+  'TX Approved',
+  'TA In Progress',
+  'TA Completed',
+  'Bundling In Progress',
+  'Bundle Completed'
+];
+
+let currentFilteredList = [];
+let activeBoardSearch = '';
+let activeDrawerTripId = null;
+
+const csvUpload = document.getElementById('csvUpload');
+const tripTableBody = document.querySelector('#trip-table tbody');
+const startDateInp = document.getElementById('startDate');
+const endDateInp = document.getElementById('endDate');
+const applyDateFilterBtn = document.getElementById('applyDateFilter');
+const dateRangeButtons = document.querySelectorAll('#date-filter button[data-range]');
+const boardSearchInput = document.getElementById('boardSearch');
+const clearBoardSearchBtn = document.getElementById('clearBoardSearch');
+const boardSummaryContainer = document.getElementById('board-summary');
+const detailsDrawer = document.getElementById('detailsDrawer');
+const detailsBackdrop = document.getElementById('detailsBackdrop');
+const drawerStage = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-stage]') : null;
+const drawerTripTitle = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-trip]') : null;
+const drawerSubtitle = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-subtitle]') : null;
+const drawerBody = detailsDrawer ? detailsDrawer.querySelector('.details-body') : null;
+const drawerCloseBtn = detailsDrawer ? detailsDrawer.querySelector('.drawer-close') : null;
+const drawerStageButtons = detailsDrawer ? detailsDrawer.querySelectorAll('.stage-btn') : [];
+
+function normalizeTrip(rawTrip = {}) {
+  const originalStatus = rawTrip.originalStatus
+    || rawTrip['Trip Verification Status']
+    || rawTrip.currentStatus
+    || 'Pending Verification';
+  const boardStatus = rawTrip.boardStatus
+    || rawTrip.currentStatus
+    || originalStatus
+    || 'Pending Verification';
+
+  return {
+    ...rawTrip,
+    originalStatus,
+    boardStatus,
+    assignedTo: rawTrip.assignedTo || ''
+  };
 }
 
-// Helpers
-function parseDateString(str) {
-  return new Date(str);
-}
-function getWeekdayNumber(dt) {
-  const d = new Date(dt);
-  let wd = d.getDay(); // 0 = Sunday ... 6 = Saturday
-  if (wd === 0) wd = 7;
-  return wd;  // 1=Monday, …, 7=Sunday
-}
-function getDefaultDateRange() {
-  const now = new Date();
-  const end = new Date(now);
-  end.setDate(end.getDate() + 7);
-  return { start: now, end };
+const SPECIAL_NAMES = new Set([
+  "Gabriela","Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise",
+  "Genesis Ronquillo","Martha Aguirre","Paola Salcan","Karen Chapman",
+  "Daniel Molineros","Veronica Endara","Delia Vera","Milton Jijon",
+  "Kenia Jimenez","Carlos Matute","Andrea Martinez","Delicia Rodriguez",
+  "Mendez","Vuelo de carga","Daniel Lliguicota","Romina Campodonico",
+@@ -105,100 +129,238 @@ if (csvUpload) {
 }
 
-// SWITCH between views
-document.getElementById("btnGrid").addEventListener("click", () => {
-  document.getElementById("gridView").style.display = "";
-  document.getElementById("listView").style.display = "none";
+window.addEventListener('DOMContentLoaded', () => {
+  loadTripsFromFirebase();
 });
-document.getElementById("btnList").addEventListener("click", () => {
-  document.getElementById("gridView").style.display = "none";
-  document.getElementById("listView").style.display = "";
+
+if (applyDateFilterBtn) {
+  applyDateFilterBtn.addEventListener('click', () => {
+    applyDateFilter();
+  });
+}
+dateRangeButtons.forEach(btn => {
+  btn.addEventListener('click', evt => {
+    const rng = evt.target.getAttribute('data-range');
+    const { start, end } = getRangeFromShortcut(rng);
+    if (startDateInp) {
+      startDateInp.value = start ? start.toISOString().slice(0,10) : '';
+    }
+    if (endDateInp) {
+      endDateInp.value = end ? end.toISOString().slice(0,10) : '';
+    }
+    applyDateFilter();
+  });
 });
 
-// Render header dates above weekdays
-function renderGridTemplate(startDate) {
-  const grid = document.getElementById("gridView");
-  // Clear grid contents
-  grid.innerHTML = "";
-  // We want first row: status-col empty, then weekdays with dates
-  let headerHtml = `<div class="grid-header status-col"></div>`;
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    headerHtml += `<div class="grid-header">${["Mon","Tue","Wed","Thu","Fri"][i]}<br>${label}</div>`;
+if (boardSearchInput) {
+  boardSearchInput.addEventListener('input', evt => {
+    activeBoardSearch = evt.target.value.trim().toLowerCase();
+    renderBuckets();
+  });
+}
+
+if (clearBoardSearchBtn) {
+  clearBoardSearchBtn.addEventListener('click', () => {
+    if (!activeBoardSearch) return;
+    activeBoardSearch = '';
+    if (boardSearchInput) {
+      boardSearchInput.value = '';
+    }
+    renderBuckets();
+  });
+}
+
+if (drawerCloseBtn) {
+  drawerCloseBtn.addEventListener('click', () => {
+    closeTripDetails();
+  });
+}
+
+if (detailsBackdrop) {
+  detailsBackdrop.addEventListener('click', () => {
+    closeTripDetails();
+  });
+}
+
+if (detailsDrawer) {
+  document.addEventListener('keydown', evt => {
+    if (evt.key === 'Escape') {
+      closeTripDetails();
+    }
+  });
+}
+
+drawerStageButtons.forEach(btn => {
+  btn.addEventListener('click', handleStageButtonClick);
+});
+
+function parseDateOnly(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function getWeekRange(date) {
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(date.setDate(diff));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { start: monday, end: sunday };
+}
+function getRangeFromShortcut(shortcut) {
+  const today = new Date();
+  const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  switch (shortcut) {
+    case 'thisWeek': {
+      const { start, end } = getWeekRange(d0);
+      return { start, end };
+    }
+    case 'nextWeek': {
+      const { start, end } = getWeekRange(d0);
+      const ns = new Date(start); ns.setDate(ns.getDate() + 7);
+      const ne = new Date(end); ne.setDate(ne.getDate() + 7);
+      return { start: ns, end: ne };
+    }
+    case 'allUpcoming':
+      return { start: d0, end: null };
+    default:
+      return { start: null, end: null };
   }
-  grid.insertAdjacentHTML("beforeend", headerHtml);
+}
 
-  // Status rows
-  const statuses = ["Pending", "In Progress", "TX Approved", "Rejected", "Preparing", "TA Completed", "ReadyForLabel"];
-  statuses.forEach(status => {
-    // status label
-    grid.insertAdjacentHTML("beforeend", `<div class="status-col">${status}</div>`);
-    // five cells for Monday‑Friday
-    for (let day = 1; day <= 5; day++) {
-      grid.insertAdjacentHTML("beforeend",
-        `<div class="cell" data-status="${status}" data-day="${day}"></div>`);
+function closeTripDetails() {
+  if (!detailsDrawer) return;
+  detailsDrawer.classList.remove('open');
+  detailsDrawer.setAttribute('aria-hidden', 'true');
+  if (detailsBackdrop) {
+    detailsBackdrop.classList.remove('visible');
+  }
+  document.body.classList.remove('drawer-open');
+  activeDrawerTripId = null;
+}
+
+function updateDrawerStageButtons(trip) {
+  if (!detailsDrawer) return;
+  const currentStage = trip.boardStatus || 'Pending Verification';
+  const idx = PIPELINE_STATUSES.indexOf(currentStage);
+  drawerStageButtons.forEach(btn => {
+    const action = btn.dataset.action;
+    if (action === 'prev-stage') {
+      btn.disabled = idx <= 0;
+    } else if (action === 'next-stage') {
+      btn.disabled = idx === PIPELINE_STATUSES.length - 1;
     }
   });
 }
 
-// Clear all cells
-function clearGridCells() {
-  document.querySelectorAll("#gridView .cell").forEach(c => c.innerHTML = "");
+function openTripDetails(trip) {
+  if (!detailsDrawer) return;
+  activeDrawerTripId = String(trip['Trip ID'] ?? '');
+  const stage = trip.boardStatus || 'Pending Verification';
+  if (drawerStage) {
+    drawerStage.textContent = stage;
+  }
+  if (drawerTripTitle) {
+    drawerTripTitle.textContent = `Trip ${trip['Trip ID'] || '—'}`;
+  }
+  if (drawerSubtitle) {
+    const traveler = trip['Traveler'] || 'No traveler assigned';
+    const dest = trip['USA Dest'] || 'Destination TBD';
+    const ship = trip['Ship Bundle'] || 'Ship date TBD';
+    drawerSubtitle.textContent = `${traveler} • ${dest} • ${ship}`;
+  }
+  if (drawerBody) {
+    const infoRows = [
+      ['Trip ID', trip['Trip ID']],
+      ['Traveler', trip['Traveler']],
+      ['USA Destination', trip['USA Dest']],
+      ['Ship Bundle', trip['Ship Bundle']],
+      ['Max USA Date', trip['Max USA Date']],
+      ['Original Status', trip.originalStatus],
+      ['Current Stage', stage],
+      ['Items Accepted', trip['Items Accepted']],
+      ['Weight', trip['Weight']],
+      ['Assigned To', trip.assignedTo || 'Unassigned'],
+      ['Notes', trip['Notes'] || trip['Internal Notes'] || '—']
+    ];
+    drawerBody.innerHTML = infoRows.map(([label, value]) => {
+      const safeValue = value !== undefined && value !== '' ? value : '—';
+      return `
+        <div class="detail-row">
+          <span class="label">${label}</span>
+          <span class="value">${safeValue}</span>
+        </div>
+      `;
+    }).join('');
+  }
+  updateDrawerStageButtons(trip);
+  detailsDrawer.classList.add('open');
+  detailsDrawer.setAttribute('aria-hidden', 'false');
+  if (detailsBackdrop) {
+    detailsBackdrop.classList.add('visible');
+  }
+  document.body.classList.add('drawer-open');
 }
 
-// Metrics
-function renderMetrics(filteredTrips) {
-  document.getElementById("totalTrips").textContent = filteredTrips.length;
-  let sum = 0;
-  filteredTrips.forEach(tr => {
-    sum += Number(tr["Items Accepted"]) || 0;
-  });
-  document.getElementById("totalItems").textContent = sum;
+function handleStageButtonClick(evt) {
+  const action = evt.currentTarget.dataset.action;
+  if (!activeDrawerTripId) return;
+  const trip = trips.find(t => String(t['Trip ID']) === String(activeDrawerTripId));
+  if (!trip) return;
+  const currentStage = trip.boardStatus || 'Pending Verification';
+  let idx = PIPELINE_STATUSES.indexOf(currentStage);
+  if (idx === -1) idx = 0;
+  if (action === 'prev-stage' && idx > 0) {
+    idx -= 1;
+  } else if (action === 'next-stage' && idx < PIPELINE_STATUSES.length - 1) {
+    idx += 1;
+  }
+  const nextStage = PIPELINE_STATUSES[idx];
+  trip.boardStatus = nextStage;
+  uploadTripsToFirebase(trips);
+  renderBuckets();
+  renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
+  openTripDetails(trip);
 }
 
-// Render charts (status distribution)
-function renderStatusChart(trips) {
-  const ctx = document.getElementById("statusChart").getContext("2d");
-  const statusCounts = {};
-  trips.forEach(tr => {
-    const saved = loadTripState(tr["Trip ID"]);
-    const st = saved.status || tr["Trip Verification Status"];
-    statusCounts[st] = (statusCounts[st] || 0) + 1;
-  });
-  const labels = Object.keys(statusCounts);
-  const data = labels.map(l => statusCounts[l]);
-  new Chart(ctx, {
-    type: 'pie',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: labels.map(l => {
-        // color mapping logic or fallback
-        if (l === "TX Approved") return "#8BC34A";
-        if (l === "Pending" || l === "In Progress") return "#FFB74D";
-        if (l === "Rejected") return "#E57373";
-        return "#90A4AE";
-      }) }]
-    }
-  });
-}
-
-// Render grid view
-function renderGridView(filterStart, filterEnd) {
-  // Rebuild template with correct dates
-  renderGridTemplate(filterStart);
-  clearGridCells();
-  const filtered = allTrips.filter(trip => {
-    const bd = parseDateString(trip["Ship Bundle"]);
-    if (filterStart && filterEnd) {
-      return bd >= filterStart && bd <= filterEnd;
-    }
-    return true;
-  });
-  filtered.sort((a,b) => parseDateString(a["Ship Bundle"]) - parseDateString(b["Ship Bundle"]);
-
-  renderMetrics(filtered);
-  renderStatusChart(filtered);
-
-  filtered.forEach(trip => {
-    const weekday = getWeekdayNumber(trip["Ship Bundle"]);
-    if (weekday > 5) return;
-    const saved = loadTripState(trip["Trip ID"]);
-    const status = saved.status || trip["Trip Verification Status"];
-    const cell = document.querySelector(`#gridView .cell[data-status="${status}"][data-day="${weekday}"]`);
-    if (!cell) return;
-    const tile = createTile(trip, status);
-    cell.appendChild(tile);
-  });
-  setupDragAndDropGrid();
-}
-
-// Create a tile
-function createTile(trip, status) {
-  const div = document.createElement("div");
-  div.classList.add("trip-tile");
-  // highlight logic
-  if (trip["Trip Verification Status"] !== "TX Approved") div.classList.add("highlight-not-approved");
-  if (STATES_RED.has(trip["USA Dest"])) div.classList.add("highlight-dest-red");
-  if (TRAVELER_PURPLE.has(trip["Traveler"])) div.classList.add("highlight-trav-purple");
-
-  div.dataset.tripId = trip["Trip ID"];
-  div.dataset.status = status;
-
-  const sum = document.createElement("div");
-  sum.classList.add("summary");
-  sum.innerHTML = `
-    <div><strong>ID:</strong> ${trip["Trip ID"]}</div>
-    <div><strong>Traveler:</strong> ${trip["Traveler"]}</div>
-    <div><strong>Ship Bundle:</strong> ${trip["Ship Bundle"]}</div>
-    <div><strong>Dest:</strong> ${trip["USA Dest"]}</div>
-    <div><strong>Accepted:</strong> ${trip["Items Accepted"]}</div>
-    <div><strong>Status:</strong> ${status}</div>
-  `;
-  div.appendChild(sum);
-
-  const dt = document.createElement("div");
-  dt.classList.add("details");
-  dt.innerHTML = `
-    <div><strong>Max USA Date:</strong> ${trip["Max USA Date"]}</div>
-    <div><strong>Items Ready:</strong> ${trip["Items Ready to process"]}</div>
-    <div><strong>Total Weight:</strong> ${trip["Total Bundle Weight"]}</div>
-    <div><strong>User ID:</strong> ${trip["User ID"]}</div>
-  `;
-  div.appendChild(dt);
-
-  div.addEventListener("click", e => {
-    if (e.target.tagName.toLowerCase() === "input") return;
-    div.classList.toggle("expanded");
-  });
-
-  const inp = document.createElement("input");
-  inp.type = "text";
-  inp.placeholder = "Your name...";
-  inp.classList.add("assign-input");
-  const saved = loadTripState(trip["Trip ID"]);
-  inp.value = saved.assignedName || "";
-  inp.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      saveTripState(trip["Trip ID"], "assignedName", inp.value.trim());
-      inp.blur();
-    }
-  });
-  div.appendChild(inp);
-
-  return div;
-}
-
-function setupDragAndDropGrid() {
-  document.querySelectorAll("#gridView .cell").forEach(cell => {
-    Sortable.create(cell, {
-      group: "sharedGrid",
-      animation: 150,
-      onAdd: (evt) => {
-        const tile = evt.item;
-        const newStatus = evt.to.getAttribute("data-status");
-        const tid = tile.dataset.tripId;
-        saveTripState(tid, "status", newStatus);
-      }
+function applyDateFilter() {
+  const start = parseDateOnly(startDateInp ? startDateInp.value : '');
+  const end = parseDateOnly(endDateInp ? endDateInp.value : '');
+  let filtered = trips;
+  if (start && end) {
+    filtered = trips.filter(trip => {
+      const bd = parseDateOnly(trip['Ship Bundle']);
+      return bd && bd >= start && bd <= end;
     });
+  } else if (start && !end) {
+    filtered = trips.filter(trip => {
+      const bd = parseDateOnly(trip['Ship Bundle']);
+      return bd && bd >= start;
+    });
+  }
+  currentFilteredList = filtered;
+  renderTopMetrics(filtered);
+  renderTripTable(filtered);
+  renderBuckets(filtered);
+  renderChartsAndKPIs(filtered);
+}
+
+function renderTopMetrics(list) {
+  const container = document.getElementById('top-kpi-container');
+  if (!container) return;
+  container.innerHTML = '';
+  let total = 0, approved = 0, pending = 0, ambassadors = 0;
+  list.forEach(trip => {
+    total++;
+    if ((trip.originalStatus || '').toLowerCase() === 'tx approved') approved++;
+    else pending++;
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        ambassadors++;
+        break;
+      }
+    }
+  });
+  const metrics = [
+    ['Total Trips', total],
+    ['Total Approved', approved],
+@@ -230,136 +392,281 @@ function renderTripTable(list) {
+        break;
+      }
+    }
+    const cells = [
+      trip['Trip ID'],
+      trip['Items Accepted'],
+      trip['Traveler'],
+      trip['USA Dest'],
+      trip.originalStatus,
+      trip['Ship Bundle'],
+      trip['Max USA Date']
+    ];
+    cells.forEach(val => {
+      const td = document.createElement('td');
+      td.textContent = val !== undefined ? val : '';
+      tr.appendChild(td);
+    });
+    tr.addEventListener('click', () => {
+      const details = Object.entries(trip).map(([k, v]) => `${k}: ${v}`).join('\n');
+      alert(details);
+    });
+    tripTableBody.appendChild(tr);
   });
 }
 
-// LIST VIEW rendering
-function renderListView(filterStart, filterEnd) {
-  const tbody = document.getElementById("listBody");
-  tbody.innerHTML = "";
-  const filtered = allTrips.filter(trip => {
-    const bd = parseDateString(trip["Ship Bundle"]);
-    if (filterStart && filterEnd) {
-      return bd >= filterStart && bd <= filterEnd;
+function renderBoardSummary(list = currentFilteredList.length ? currentFilteredList : trips) {
+  if (!boardSummaryContainer) return;
+  const activeList = Array.isArray(list) ? list : [];
+  let totalItems = 0;
+  let totalWeight = 0;
+  let ambassadors = 0;
+  let readyToProcess = 0;
+
+  activeList.forEach(trip => {
+    const items = parseInt(trip['Items Accepted'], 10);
+    const weight = parseFloat(trip['Weight']);
+    if (Number.isFinite(items)) totalItems += items;
+    if (Number.isFinite(weight)) totalWeight += weight;
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        ambassadors += 1;
+        break;
+      }
     }
-    return true;
+    if ((trip.originalStatus || '').toLowerCase().includes('pending')) {
+      readyToProcess += Number.isFinite(items) ? items : 0;
+    }
   });
-  filtered.sort((a,b) => parseDateString(a["Ship Bundle"]) - parseDateString(b["Ship Bundle"]);
 
-  filtered.forEach(trip => {
-    const saved = loadTripState(trip["Trip ID"]);
-    const status = saved.status || trip["Trip Verification Status"];
-    const tr = document.createElement("tr");
-
-    if (trip["Trip Verification Status"] !== "TX Approved") tr.classList.add("highlight-not-approved");
-    if (STATES_RED.has(trip["USA Dest"])) tr.classList.add("highlight-dest-red");
-    if (TRAVELER_PURPLE.has(trip["Traveler"])) tr.classList.add("highlight-trav-purple");
-
-    tr.innerHTML = `
-      <td>${trip["Trip ID"]}</td>
-      <td>${trip["Traveler"]}</td>
-      <td>${trip["Ship Bundle"]}</td>
-      <td>${trip["Max USA Date"] || ""}</td>
-      <td>${trip["USA Dest"]}</td>
-      <td>${trip["Items Accepted"]}</td>
-      <td>${status}</td>
-      <td>${trip["Items Ready to process"] || ""}</td>
-      <td><input type="text" class="assign-input-list" data-tripid="${trip["Trip ID"]}" value="${saved.assignedName || ""}" /></td>
+  if (!activeList.length) {
+    const message = activeBoardSearch
+      ? 'No trips match your search'
+      : 'No trips in pipeline';
+    boardSummaryContainer.innerHTML = `
+      <div class="summary-pill empty-pill">
+        <span class="label">Pipeline</span>
+        <span class="value">${message}</span>
+      </div>
     `;
-    tbody.appendChild(tr);
+    return;
+  }
+
+  const weightDisplay = totalWeight ? totalWeight.toFixed(1) : '0';
+
+  const summaryItems = [
+    ['Trips in Pipeline', activeList.length],
+    ['Total Items Accepted', totalItems],
+    ['Total Weight', `${weightDisplay} lbs`],
+    ['Ambassador Trips', ambassadors],
+    ['Ready to Process Items', readyToProcess]
+  ];
+
+  boardSummaryContainer.innerHTML = summaryItems.map(([label, value]) => `
+    <div class="summary-pill">
+      <span class="label">${label}</span>
+      <span class="value">${value}</span>
+    </div>
+  `).join('');
+}
+
+function renderBuckets(list = currentFilteredList.length ? currentFilteredList : trips) {
+  const bucketEls = document.querySelectorAll('.bucket');
+  if (!bucketEls.length) return;
+
+  const baseList = Array.isArray(list) ? list : trips;
+  const boardList = activeBoardSearch
+    ? baseList.filter(trip => {
+        const term = activeBoardSearch;
+        const fields = [
+          trip['Trip ID'],
+          trip['Traveler'],
+          trip['USA Dest'],
+          trip.boardStatus,
+          trip.originalStatus
+        ].map(val => String(val || '').toLowerCase());
+        return fields.some(val => val.includes(term));
+      })
+    : baseList;
+
+  const stageMetrics = new Map();
+
+  bucketEls.forEach(bucket => {
+    const listEl = bucket.querySelector('.bucket-list');
+    if (listEl) {
+      listEl.innerHTML = '';
+      listEl.classList.remove('is-empty', 'drag-over');
+    }
   });
 
-  // Attach Enter key events to list view inputs
-  document.querySelectorAll(".assign-input-list").forEach(inp => {
-    inp.addEventListener("keydown", e => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const id = inp.dataset.tripid;
-        saveTripState(id, "assignedName", inp.value.trim());
-        inp.blur();
+  boardList.forEach(trip => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.tripId = trip['Trip ID'];
+
+    if ((trip.originalStatus || '').toLowerCase() !== 'tx approved') {
+      card.classList.add('red-status');
+    }
+    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
+      card.classList.add('special-dest');
+    }
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        card.classList.add('highlight-name');
+        break;
+      }
+    }
+    if (trip.boardStatus === 'TA Completed') {
+      card.classList.add('ta-completed');
+    }
+    if (trip.boardStatus === 'Bundle Completed') {
+      card.classList.add('bundle-completed');
+    }
+
+    let opts = `<option value="">Assign To</option>`;
+    ASSIGNEES.forEach(nm => {
+      opts += `<option value="${nm}">${nm}</option>`;
+    });
+
+    const itemsVal = parseInt(trip['Items Accepted'], 10);
+    const weightVal = parseFloat(trip['Weight']);
+    const itemsText = Number.isFinite(itemsVal)
+      ? `${itemsVal} ${itemsVal === 1 ? 'item' : 'items'}`
+      : 'No items';
+    const travelerName = trip['Traveler'] || 'Unknown traveler';
+    const destination = trip['USA Dest'] || 'Destination TBD';
+    const shipDate = trip['Ship Bundle'] ? `Ship ${trip['Ship Bundle']}` : 'Ship date TBD';
+
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-id">#${trip['Trip ID'] || '—'}</span>
+        <span class="card-items">${itemsText}</span>
+      </div>
+      <div class="card-body">
+        <strong>${travelerName}</strong>
+        <span>${destination}</span>
+        <span class="card-meta">${shipDate}</span>
+      </div>
+      <div class="card-footer">
+        <span class="assign-label">Owner</span>
+        <select class="assign-select">${opts}</select>
+      </div>
+    `;
+    const sel = card.querySelector('.assign-select');
+    sel.value = trip.assignedTo || '';
+    sel.addEventListener('mousedown', e => e.stopPropagation());
+    sel.addEventListener('touchstart', e => e.stopPropagation());
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', e => {
+      trip.assignedTo = e.target.value;
+      uploadTripsToFirebase(trips);
+      if (activeDrawerTripId && String(activeDrawerTripId) === String(trip['Trip ID'])) {
+        openTripDetails(trip);
+      }
+    });
+
+    card.addEventListener('click', () => {
+      openTripDetails(trip);
+    });
+
+    const boardStatus = trip.boardStatus || 'Pending Verification';
+    const bucketList = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
+    if (bucketList) {
+      bucketList.appendChild(card);
+    } else {
+      const fallback = document.querySelector(`.bucket[data-status="Pending Verification"] .bucket-list`);
+      if (fallback) fallback.appendChild(card);
+    }
+
+    const metrics = stageMetrics.get(boardStatus) || { count: 0, items: 0, weight: 0 };
+    metrics.count += 1;
+    if (Number.isFinite(itemsVal)) metrics.items += itemsVal;
+    if (Number.isFinite(weightVal)) metrics.weight += weightVal;
+    stageMetrics.set(boardStatus, metrics);
+  });
+
+  bucketEls.forEach(bucket => {
+    const status = bucket.dataset.status;
+    const metrics = stageMetrics.get(status) || { count: 0, items: 0, weight: 0 };
+    const countEl = bucket.querySelector('[data-stage-count]');
+    if (countEl) {
+      countEl.textContent = `${metrics.count} ${metrics.count === 1 ? 'Trip' : 'Trips'}`;
+    }
+    const itemsEl = bucket.querySelector('[data-stage-items]');
+    if (itemsEl) {
+      const itemsLabel = `${metrics.items} ${metrics.items === 1 ? 'Item' : 'Items'}`;
+      itemsEl.textContent = itemsLabel;
+    }
+    const weightEl = bucket.querySelector('[data-stage-weight]');
+    if (weightEl) {
+      const weightText = metrics.weight ? metrics.weight.toFixed(1) : '0';
+      weightEl.textContent = `${weightText} lbs`;
+    }
+    const listEl = bucket.querySelector('.bucket-list');
+    if (listEl && !listEl.children.length) {
+      listEl.classList.add('is-empty');
+    }
+  });
+
+  renderBoardSummary(boardList);
+  initDragAndDrop();
+}
+
+function initDragAndDrop() {
+  const lists = document.querySelectorAll('.bucket-list');
+  if (!lists.length) return;
+  lists.forEach(list => {
+    if (list.dataset.sortableInitialized === 'true') return;
+    list.dataset.sortableInitialized = 'true';
+    new Sortable(list, {
+      group: {
+        name: 'shared',
+        pull: true,
+        put: true
+      },
+      animation: 150,
+      onMove(evt) {
+        document.querySelectorAll('.bucket-list').forEach(l => {
+          if (l !== evt.to) {
+            l.classList.remove('drag-over');
+          }
+        });
+        evt.to.classList.add('drag-over');
+      },
+      onEnd(evt) {
+        document.querySelectorAll('.bucket-list').forEach(l => l.classList.remove('drag-over'));
+        const card = evt.item;
+        const newBucket = evt.to.closest('.bucket');
+        const newStatus = newBucket.dataset.status;
+        const tripId = card.dataset.tripId;
+        const trip = trips.find(t => String(t['Trip ID']) === String(tripId));
+        if (trip) {
+          trip.boardStatus = newStatus;
+          uploadTripsToFirebase(trips);
+          setTimeout(() => {
+            renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
+            renderBuckets();
+          }, 200);
+        }
       }
     });
   });
-
-  renderMetrics(filtered);
-  renderStatusChart(filtered);
 }
 
-// CSV load + filter wiring
-document.getElementById("csvInput").addEventListener("change", e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
-    complete: results => {
-      allTrips = results.data;
-      const { start, end } = getDefaultDateRange();
-      document.getElementById("dateStart").valueAsDate = start;
-      document.getElementById("dateEnd").valueAsDate = end;
-      renderGridView(start, end);
-      renderListView(start, end);
-    }
-  });
-});
-document.getElementById("applyDateFilter").addEventListener("click", () => {
-  const start = document.getElementById("dateStart").valueAsDate;
-  const end = document.getElementById("dateEnd").valueAsDate;
-  renderGridView(start, end);
-  renderListView(start, end);
-});
-document.getElementById("resetDateFilter").addEventListener("click", () => {
-  const { start, end } = getDefaultDateRange();
-  document.getElementById("dateStart").valueAsDate = start;
-  document.getElementById("dateEnd").valueAsDate = end;
-  renderGridView(start, end);
-  renderListView(start, end);
-});
+function renderChartsAndKPIs(list) {
+  const kpiContainer = document.getElementById('kpi-container');
+  const statusCanvas = document.getElementById('statusChart');
+  const dailyCanvas = document.getElementById('dailyChart');
+  const metricCanvas = document.getElementById('metricChart');
+  if (!kpiContainer && !statusCanvas && !dailyCanvas && !metricCanvas) {
+    return;
+  }
 
+  const statusCounts = {};
+  const dayCounts = {};
+  let totalItems = 0, totalWeight = 0, specialDestTrips = 0, readyToProcess = 0;
+
+  list.forEach(t => {
+    const statusKey = t.originalStatus || 'Pending Verification';
+    statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
+    const bd = t['Ship Bundle'];
+    if (bd) dayCounts[bd] = (dayCounts[bd] || 0) + 1;
