@@ -1,12 +1,76 @@
 // app.js — with drag/drop highlight (bucket hover) support
 
-const db = window.firebaseDb;
-const firebaseRef = window.firebaseRef;
-const firebaseSet = window.firebaseSet;
-const firebaseOnValue = window.firebaseOnValue;
+const firebaseConfig = {
+  apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
+  authDomain: "bundle-board-dashboard.firebaseapp.com",
+  databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
+  projectId: "bundle-board-dashboard",
+  storageBucket: "bundle-board-dashboard.firebasestorage.app",
+  messagingSenderId: "114676418819",
+  appId: "1:114676418819:web:fd8a544213d76b56050136",
+  measurementId: "G-M2WCBZ94YS"
+};
+
+let firebaseDb = null;
+let firebaseReady = false;
+let firebaseInitPromise = null;
+let firebaseApi = { ref: null, set: null, onValue: null };
+
+async function ensureFirebaseInitialized() {
+  if (firebaseReady && firebaseDb && firebaseApi.ref && firebaseApi.set && firebaseApi.onValue) {
+    return true;
+  }
+
+  if (firebaseInitPromise) {
+    return firebaseInitPromise;
+  }
+
+  firebaseInitPromise = (async () => {
+    try {
+      const [{ initializeApp }, { getDatabase, ref, set, onValue }] = await Promise.all([
+        import('https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js')
+      ]);
+
+      const firebaseApp = initializeApp(firebaseConfig);
+      firebaseDb = getDatabase(firebaseApp);
+      firebaseApi = { ref, set, onValue };
+      firebaseReady = true;
+      return true;
+    } catch (err) {
+      console.warn('Firebase initialization failed, falling back to local storage.', err);
+      firebaseDb = null;
+      firebaseApi = { ref: null, set: null, onValue: null };
+      firebaseReady = false;
+      return false;
+    } finally {
+      if (!firebaseReady) {
+        firebaseInitPromise = null;
+      }
+    }
+  })();
+
+  return firebaseInitPromise;
+}
 
 let trips = [];
 let statusChart, dailyChart, metricChart;
+let firebaseSubscriptionActive = false;
+
+const LOCAL_STORAGE_KEY = 'bundle-board::currentTrips';
+
+const PIPELINE_STATUSES = [
+  'Pending Verification',
+  'TX Approved',
+  'TA In Progress',
+  'TA Completed',
+  'Bundling In Progress',
+  'Bundle Completed'
+];
+
+let currentFilteredList = [];
+let activeBoardSearch = '';
+let activeDrawerTripId = null;
 
 const csvUpload = document.getElementById('csvUpload');
 const tripTableBody = document.querySelector('#trip-table tbody');
@@ -14,6 +78,26 @@ const startDateInp = document.getElementById('startDate');
 const endDateInp = document.getElementById('endDate');
 const applyDateFilterBtn = document.getElementById('applyDateFilter');
 const dateRangeButtons = document.querySelectorAll('#date-filter button[data-range]');
+const boardSearchInput = document.getElementById('boardSearch');
+const clearBoardSearchBtn = document.getElementById('clearBoardSearch');
+const boardSummaryContainer = document.getElementById('board-summary');
+const detailsDrawer = document.getElementById('detailsDrawer');
+const detailsBackdrop = document.getElementById('detailsBackdrop');
+const drawerStage = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-stage]') : null;
+const drawerTripTitle = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-trip]') : null;
+const drawerSubtitle = detailsDrawer ? detailsDrawer.querySelector('[data-drawer-subtitle]') : null;
+const drawerBody = detailsDrawer ? detailsDrawer.querySelector('.details-body') : null;
+const drawerCloseBtn = detailsDrawer ? detailsDrawer.querySelector('.drawer-close') : null;
+const drawerStageButtons = detailsDrawer ? detailsDrawer.querySelectorAll('.stage-btn') : [];
+const createTripBtn = document.getElementById('createTripBtn');
+const createTripModal = document.getElementById('createTripModal');
+const createTripForm = document.getElementById('createTripForm');
+const createTripStageSelect = document.getElementById('createTripStage');
+const createTripVerificationSelect = document.getElementById('createTripVerification');
+const createTripAssigneeSelect = document.getElementById('createTripAssignee');
+const createTripCloseEls = createTripModal ? createTripModal.querySelectorAll('[data-close]') : [];
+const createTripBackdrop = createTripModal ? createTripModal.querySelector('.modal-backdrop') : null;
+const createTripTripIdInput = createTripForm ? createTripForm.querySelector('input[name="tripId"]') : null;
 
 function normalizeTrip(rawTrip = {}) {
   const originalStatus = rawTrip.originalStatus
@@ -33,6 +117,37 @@ function normalizeTrip(rawTrip = {}) {
   };
 }
 
+function readTripsFromLocalStorage() {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeTrip);
+    }
+  } catch (err) {
+    console.warn('Unable to read trips from local storage.', err);
+  }
+  return [];
+}
+
+function persistTripsLocally(list) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+  } catch (err) {
+    console.warn('Unable to persist trips locally.', err);
+  }
+}
+
+const TRIP_VERIFICATION_STATUSES = [
+  'Pending Verification',
+  'TX Approved',
+  'TA In Progress',
+  'TA Completed',
+  'Bundling In Progress',
+  'Bundle Completed'
+];
+
 const SPECIAL_NAMES = new Set([
   "Gabriela","Endara","Jose Arroyo","Andres Alvarez","Gianni Bloise",
   "Genesis Ronquillo","Martha Aguirre","Paola Salcan","Karen Chapman",
@@ -49,9 +164,18 @@ const SPECIAL_NAMES = new Set([
 const SPECIAL_DESTS = new Set(["CA","NV","NJ","NY","CO","MA"]);
 const ASSIGNEES = ["Justin","Caz","Greg","CJ"];
 
-function loadTripsFromFirebase() {
-  const tripsRef = firebaseRef(db, 'currentTrips');
-  firebaseOnValue(tripsRef, snapshot => {
+async function hydrateTripsFromFirebase() {
+  const ready = await ensureFirebaseInitialized();
+  if (!ready || !firebaseDb || !firebaseApi.ref || !firebaseApi.onValue) {
+    return false;
+  }
+
+  if (firebaseSubscriptionActive) {
+    return true;
+  }
+
+  const tripsRef = firebaseApi.ref(firebaseDb, 'currentTrips');
+  firebaseApi.onValue(tripsRef, snapshot => {
     const val = snapshot.val();
     let incoming = [];
     if (Array.isArray(val)) {
@@ -60,20 +184,159 @@ function loadTripsFromFirebase() {
       incoming = Object.values(val);
     }
     trips = incoming.map(normalizeTrip);
+    persistTripsLocally(trips);
     applyDateFilter();
+  }, error => {
+    console.error('Firebase realtime subscription failed, switching to local storage.', error);
+    firebaseReady = false;
+    firebaseSubscriptionActive = false;
+    firebaseDb = null;
+    firebaseApi = { ref: null, set: null, onValue: null };
+    firebaseInitPromise = null;
+    loadTripsFromLocalCache();
   });
+
+  firebaseSubscriptionActive = true;
+  return true;
+}
+
+function loadTripsFromLocalCache() {
+  trips = readTripsFromLocalStorage();
+  applyDateFilter();
+}
+
+function hydrateCreateTripFormControls() {
+  if (createTripStageSelect) {
+    createTripStageSelect.innerHTML = PIPELINE_STATUSES.map((status, idx) => {
+      const selectedAttr = idx === 0 ? ' selected' : '';
+      return `<option value="${status}"${selectedAttr}>${status}</option>`;
+    }).join('');
+  }
+  if (createTripVerificationSelect) {
+    createTripVerificationSelect.innerHTML = TRIP_VERIFICATION_STATUSES.map((status, idx) => {
+      const selectedAttr = idx === 0 ? ' selected' : '';
+      return `<option value="${status}"${selectedAttr}>${status}</option>`;
+    }).join('');
+  }
+  if (createTripAssigneeSelect) {
+    const options = ['<option value="">Unassigned</option>'];
+    ASSIGNEES.forEach(name => {
+      options.push(`<option value="${name}">${name}</option>`);
+    });
+    createTripAssigneeSelect.innerHTML = options.join('');
+  }
+}
+
+function resetCreateTripForm() {
+  if (!createTripForm) return;
+  createTripForm.reset();
+  if (createTripStageSelect && PIPELINE_STATUSES.length) {
+    createTripStageSelect.value = PIPELINE_STATUSES[0];
+  }
+  if (createTripVerificationSelect && TRIP_VERIFICATION_STATUSES.length) {
+    createTripVerificationSelect.value = TRIP_VERIFICATION_STATUSES[0];
+  }
+  if (createTripAssigneeSelect) {
+    createTripAssigneeSelect.value = '';
+  }
+}
+
+function openCreateTripModal() {
+  if (!createTripModal) return;
+  hydrateCreateTripFormControls();
+  resetCreateTripForm();
+  createTripModal.classList.add('open');
+  createTripModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  if (createTripTripIdInput) {
+    setTimeout(() => {
+      createTripTripIdInput.focus();
+    }, 50);
+  }
+}
+
+function closeCreateTripModal() {
+  if (!createTripModal) return;
+  createTripModal.classList.remove('open');
+  createTripModal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+function handleCreateTripSubmit(evt) {
+  if (!createTripForm) return;
+  evt.preventDefault();
+  const formData = new FormData(createTripForm);
+  const tripId = String(formData.get('tripId') || '').trim();
+  if (!tripId) {
+    alert('Trip ID is required to create a trip.');
+    return;
+  }
+  const traveler = String(formData.get('traveler') || '').trim();
+  const destination = String(formData.get('usaDest') || '').trim();
+  const shipBundle = String(formData.get('shipBundle') || '').trim();
+  const itemsAccepted = String(formData.get('itemsAccepted') || '').trim();
+  const weight = String(formData.get('weight') || '').trim();
+  const verificationStatus = String(formData.get('verificationStatus') || '').trim() || 'Pending Verification';
+  const boardStatus = String(formData.get('boardStatus') || '').trim() || verificationStatus || 'Pending Verification';
+  const assignedTo = String(formData.get('assignedTo') || '').trim();
+  const notes = String(formData.get('notes') || '').trim();
+
+  const existingIndex = trips.findIndex(t => String(t['Trip ID']) === tripId);
+  const existingTrip = existingIndex >= 0 ? trips[existingIndex] : null;
+
+  const baseTrip = {
+    'Trip ID': tripId,
+    'Traveler': traveler,
+    'USA Dest': destination,
+    'Ship Bundle': shipBundle,
+    'Items Accepted': itemsAccepted,
+    'Weight': weight,
+    'Trip Verification Status': verificationStatus,
+    'Notes': notes || (existingTrip ? (existingTrip['Notes'] || existingTrip['Internal Notes'] || '') : ''),
+    'Internal Notes': notes || (existingTrip ? existingTrip['Internal Notes'] || existingTrip['Notes'] || '' : '')
+  };
+
+  const normalized = normalizeTrip({
+    ...existingTrip,
+    ...baseTrip,
+    originalStatus: verificationStatus || (existingTrip ? existingTrip.originalStatus : 'Pending Verification'),
+    boardStatus,
+    assignedTo: assignedTo || (existingTrip ? existingTrip.assignedTo : '')
+  });
+
+  if (existingIndex >= 0) {
+    trips.splice(existingIndex, 1, normalized);
+  } else {
+    trips.push(normalized);
+  }
+
+  uploadTripsToFirebase(trips);
+  applyDateFilter();
+  closeCreateTripModal();
 }
 
 function uploadTripsToFirebase(tripsList) {
-  const tripsRef = firebaseRef(db, 'currentTrips');
-  firebaseSet(tripsRef, tripsList)
-    .catch(err => console.error("Firebase write error:", err));
+  persistTripsLocally(tripsList);
+  ensureFirebaseInitialized().then(() => {
+    if (!firebaseReady || !firebaseDb || !firebaseApi.ref || !firebaseApi.set) {
+      return;
+    }
+    const tripsRef = firebaseApi.ref(firebaseDb, 'currentTrips');
+    firebaseApi.set(tripsRef, tripsList).catch(err => {
+      console.error('Firebase write error, keeping local cache only.', err);
+      firebaseReady = false;
+    });
+  });
 }
 
 if (csvUpload) {
   csvUpload.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) {
+      if (typeof Papa === 'undefined') {
+        console.error('CSV upload attempted but PapaParse is unavailable.');
+        return;
+      }
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -83,29 +346,46 @@ if (csvUpload) {
             trips.map(t => [String(t['Trip ID']), normalizeTrip(t)])
           );
 
-          trips = data.map(row => {
+          const refreshedTrips = [];
+          data.forEach(row => {
             const tripId = String(row['Trip ID'] || '').trim();
+            if (!tripId) return;
             const existing = existingTripsMap.get(tripId);
             const originalStatus = row['Trip Verification Status'] || 'Pending Verification';
+            const csvNotes = typeof row['Notes'] === 'string' ? row['Notes'].trim() : '';
+            const csvInternalNotes = typeof row['Internal Notes'] === 'string' ? row['Internal Notes'].trim() : '';
+            const noteValue = csvNotes
+              ? row['Notes']
+              : (existing ? (existing['Notes'] || existing['Internal Notes'] || '') : '');
+            const internalNoteValue = csvInternalNotes
+              ? row['Internal Notes']
+              : (existing ? (existing['Internal Notes'] || existing['Notes'] || '') : '');
             const normalized = normalizeTrip({
               ...row,
               originalStatus,
               boardStatus: existing ? existing.boardStatus : originalStatus,
-              assignedTo: existing ? existing.assignedTo : ''
+              assignedTo: existing ? existing.assignedTo : '',
+              Notes: noteValue,
+              'Internal Notes': internalNoteValue
             });
-            return normalized;
+            refreshedTrips.push(normalized);
           });
 
+          trips = refreshedTrips;
           uploadTripsToFirebase(trips);
           applyDateFilter();
+          csvUpload.value = '';
         }
       });
     }
   });
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  loadTripsFromFirebase();
+window.addEventListener('DOMContentLoaded', async () => {
+  const hydrated = await hydrateTripsFromFirebase();
+  if (!hydrated) {
+    loadTripsFromLocalCache();
+  }
 });
 
 if (applyDateFilterBtn) {
@@ -126,6 +406,80 @@ dateRangeButtons.forEach(btn => {
     applyDateFilter();
   });
 });
+
+if (boardSearchInput) {
+  boardSearchInput.addEventListener('input', evt => {
+    activeBoardSearch = evt.target.value.trim().toLowerCase();
+    renderBuckets();
+  });
+}
+
+if (clearBoardSearchBtn) {
+  clearBoardSearchBtn.addEventListener('click', () => {
+    if (!activeBoardSearch) return;
+    activeBoardSearch = '';
+    if (boardSearchInput) {
+      boardSearchInput.value = '';
+    }
+    renderBuckets();
+  });
+}
+
+if (drawerCloseBtn) {
+  drawerCloseBtn.addEventListener('click', () => {
+    closeTripDetails();
+  });
+}
+
+if (detailsBackdrop) {
+  detailsBackdrop.addEventListener('click', () => {
+    closeTripDetails();
+  });
+}
+
+if (detailsDrawer) {
+  document.addEventListener('keydown', evt => {
+    if (evt.key === 'Escape') {
+      closeTripDetails();
+    }
+  });
+}
+
+drawerStageButtons.forEach(btn => {
+  btn.addEventListener('click', handleStageButtonClick);
+});
+
+if (createTripBtn) {
+  createTripBtn.addEventListener('click', () => {
+    openCreateTripModal();
+  });
+}
+
+if (createTripForm) {
+  hydrateCreateTripFormControls();
+  resetCreateTripForm();
+  createTripForm.addEventListener('submit', handleCreateTripSubmit);
+}
+
+if (createTripBackdrop) {
+  createTripBackdrop.addEventListener('click', () => {
+    closeCreateTripModal();
+  });
+}
+
+createTripCloseEls.forEach(el => {
+  el.addEventListener('click', () => {
+    closeCreateTripModal();
+  });
+});
+
+if (createTripModal) {
+  document.addEventListener('keydown', evt => {
+    if (evt.key === 'Escape' && createTripModal.classList.contains('open')) {
+      closeCreateTripModal();
+    }
+  });
+}
 
 function parseDateOnly(str) {
   if (!str) return null;
@@ -162,6 +516,101 @@ function getRangeFromShortcut(shortcut) {
   }
 }
 
+function closeTripDetails() {
+  if (!detailsDrawer) return;
+  detailsDrawer.classList.remove('open');
+  detailsDrawer.setAttribute('aria-hidden', 'true');
+  if (detailsBackdrop) {
+    detailsBackdrop.classList.remove('visible');
+  }
+  document.body.classList.remove('drawer-open');
+  activeDrawerTripId = null;
+}
+
+function updateDrawerStageButtons(trip) {
+  if (!detailsDrawer) return;
+  const currentStage = trip.boardStatus || 'Pending Verification';
+  const idx = PIPELINE_STATUSES.indexOf(currentStage);
+  drawerStageButtons.forEach(btn => {
+    const action = btn.dataset.action;
+    if (action === 'prev-stage') {
+      btn.disabled = idx <= 0;
+    } else if (action === 'next-stage') {
+      btn.disabled = idx === PIPELINE_STATUSES.length - 1;
+    }
+  });
+}
+
+function openTripDetails(trip) {
+  if (!detailsDrawer) return;
+  activeDrawerTripId = String(trip['Trip ID'] ?? '');
+  const stage = trip.boardStatus || 'Pending Verification';
+  if (drawerStage) {
+    drawerStage.textContent = stage;
+  }
+  if (drawerTripTitle) {
+    drawerTripTitle.textContent = `Trip ${trip['Trip ID'] || '—'}`;
+  }
+  if (drawerSubtitle) {
+    const traveler = trip['Traveler'] || 'No traveler assigned';
+    const dest = trip['USA Dest'] || 'Destination TBD';
+    const ship = trip['Ship Bundle'] || 'Ship date TBD';
+    drawerSubtitle.textContent = `${traveler} • ${dest} • ${ship}`;
+  }
+  if (drawerBody) {
+    const infoRows = [
+      ['Trip ID', trip['Trip ID']],
+      ['Traveler', trip['Traveler']],
+      ['USA Destination', trip['USA Dest']],
+      ['Ship Bundle', trip['Ship Bundle']],
+      ['Max USA Date', trip['Max USA Date']],
+      ['Original Status', trip.originalStatus],
+      ['Current Stage', stage],
+      ['Items Accepted', trip['Items Accepted']],
+      ['Weight', trip['Weight']],
+      ['Assigned To', trip.assignedTo || 'Unassigned'],
+      ['Notes', trip['Notes'] || trip['Internal Notes'] || '—']
+    ];
+    drawerBody.innerHTML = infoRows.map(([label, value]) => {
+      const safeValue = value !== undefined && value !== '' ? value : '—';
+      return `
+        <div class="detail-row">
+          <span class="label">${label}</span>
+          <span class="value">${safeValue}</span>
+        </div>
+      `;
+    }).join('');
+  }
+  updateDrawerStageButtons(trip);
+  detailsDrawer.classList.add('open');
+  detailsDrawer.setAttribute('aria-hidden', 'false');
+  if (detailsBackdrop) {
+    detailsBackdrop.classList.add('visible');
+  }
+  document.body.classList.add('drawer-open');
+}
+
+function handleStageButtonClick(evt) {
+  const action = evt.currentTarget.dataset.action;
+  if (!activeDrawerTripId) return;
+  const trip = trips.find(t => String(t['Trip ID']) === String(activeDrawerTripId));
+  if (!trip) return;
+  const currentStage = trip.boardStatus || 'Pending Verification';
+  let idx = PIPELINE_STATUSES.indexOf(currentStage);
+  if (idx === -1) idx = 0;
+  if (action === 'prev-stage' && idx > 0) {
+    idx -= 1;
+  } else if (action === 'next-stage' && idx < PIPELINE_STATUSES.length - 1) {
+    idx += 1;
+  }
+  const nextStage = PIPELINE_STATUSES[idx];
+  trip.boardStatus = nextStage;
+  uploadTripsToFirebase(trips);
+  renderBuckets();
+  renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
+  openTripDetails(trip);
+}
+
 function applyDateFilter() {
   const start = parseDateOnly(startDateInp ? startDateInp.value : '');
   const end = parseDateOnly(endDateInp ? endDateInp.value : '');
@@ -177,6 +626,7 @@ function applyDateFilter() {
       return bd && bd >= start;
     });
   }
+  currentFilteredList = filtered;
   renderTopMetrics(filtered);
   renderTripTable(filtered);
   renderBuckets(filtered);
@@ -252,12 +702,91 @@ function renderTripTable(list) {
   });
 }
 
-function renderBuckets(list) {
-  const bucketLists = document.querySelectorAll('.bucket-list');
-  if (!bucketLists.length) return;
-  bucketLists.forEach(b => b.innerHTML = '');
+function renderBoardSummary(list = currentFilteredList.length ? currentFilteredList : trips) {
+  if (!boardSummaryContainer) return;
+  const activeList = Array.isArray(list) ? list : [];
+  let totalItems = 0;
+  let totalWeight = 0;
+  let ambassadors = 0;
+  let readyToProcess = 0;
 
-  list.forEach(trip => {
+  activeList.forEach(trip => {
+    const items = parseInt(trip['Items Accepted'], 10);
+    const weight = parseFloat(trip['Weight']);
+    if (Number.isFinite(items)) totalItems += items;
+    if (Number.isFinite(weight)) totalWeight += weight;
+    for (const nm of SPECIAL_NAMES) {
+      if ((trip['Traveler'] || '').includes(nm)) {
+        ambassadors += 1;
+        break;
+      }
+    }
+    if ((trip.originalStatus || '').toLowerCase().includes('pending')) {
+      readyToProcess += Number.isFinite(items) ? items : 0;
+    }
+  });
+
+  if (!activeList.length) {
+    const message = activeBoardSearch
+      ? 'No trips match your search'
+      : 'No trips in pipeline';
+    boardSummaryContainer.innerHTML = `
+      <div class="summary-pill empty-pill">
+        <span class="label">Pipeline</span>
+        <span class="value">${message}</span>
+      </div>
+    `;
+    return;
+  }
+
+  const weightDisplay = totalWeight ? totalWeight.toFixed(1) : '0';
+
+  const summaryItems = [
+    ['Trips in Pipeline', activeList.length],
+    ['Total Items Accepted', totalItems],
+    ['Total Weight', `${weightDisplay} lbs`],
+    ['Ambassador Trips', ambassadors],
+    ['Ready to Process Items', readyToProcess]
+  ];
+
+  boardSummaryContainer.innerHTML = summaryItems.map(([label, value]) => `
+    <div class="summary-pill">
+      <span class="label">${label}</span>
+      <span class="value">${value}</span>
+    </div>
+  `).join('');
+}
+
+function renderBuckets(list = currentFilteredList.length ? currentFilteredList : trips) {
+  const bucketEls = document.querySelectorAll('.bucket');
+  if (!bucketEls.length) return;
+
+  const baseList = Array.isArray(list) ? list : trips;
+  const boardList = activeBoardSearch
+    ? baseList.filter(trip => {
+        const term = activeBoardSearch;
+        const fields = [
+          trip['Trip ID'],
+          trip['Traveler'],
+          trip['USA Dest'],
+          trip.boardStatus,
+          trip.originalStatus
+        ].map(val => String(val || '').toLowerCase());
+        return fields.some(val => val.includes(term));
+      })
+    : baseList;
+
+  const stageMetrics = new Map();
+
+  bucketEls.forEach(bucket => {
+    const listEl = bucket.querySelector('.bucket-list');
+    if (listEl) {
+      listEl.innerHTML = '';
+      listEl.classList.remove('is-empty', 'drag-over');
+    }
+  });
+
+  boardList.forEach(trip => {
     const card = document.createElement('div');
     card.className = 'card';
     card.dataset.tripId = trip['Trip ID'];
@@ -286,28 +815,87 @@ function renderBuckets(list) {
       opts += `<option value="${nm}">${nm}</option>`;
     });
 
+    const itemsVal = parseInt(trip['Items Accepted'], 10);
+    const weightVal = parseFloat(trip['Weight']);
+    const itemsText = Number.isFinite(itemsVal)
+      ? `${itemsVal} ${itemsVal === 1 ? 'item' : 'items'}`
+      : 'No items';
+    const travelerName = trip['Traveler'] || 'Unknown traveler';
+    const destination = trip['USA Dest'] || 'Destination TBD';
+    const shipDate = trip['Ship Bundle'] ? `Ship ${trip['Ship Bundle']}` : 'Ship date TBD';
+
     card.innerHTML = `
-      <strong>${trip['Trip ID']}</strong><br>
-      ${trip['Traveler']}<br>
-      ${trip['Ship Bundle']}<br>
-      <select class="assign-select">${opts}</select>
+      <div class="card-header">
+        <span class="card-id">#${trip['Trip ID'] || '—'}</span>
+        <span class="card-items">${itemsText}</span>
+      </div>
+      <div class="card-body">
+        <strong>${travelerName}</strong>
+        <span>${destination}</span>
+        <span class="card-meta">${shipDate}</span>
+      </div>
+      <div class="card-footer">
+        <span class="assign-label">Owner</span>
+        <select class="assign-select">${opts}</select>
+      </div>
     `;
     const sel = card.querySelector('.assign-select');
     sel.value = trip.assignedTo || '';
+    sel.addEventListener('mousedown', e => e.stopPropagation());
+    sel.addEventListener('touchstart', e => e.stopPropagation());
+    sel.addEventListener('click', e => e.stopPropagation());
     sel.addEventListener('change', e => {
       trip.assignedTo = e.target.value;
       uploadTripsToFirebase(trips);
+      if (activeDrawerTripId && String(activeDrawerTripId) === String(trip['Trip ID'])) {
+        openTripDetails(trip);
+      }
+    });
+
+    card.addEventListener('click', () => {
+      openTripDetails(trip);
     });
 
     const boardStatus = trip.boardStatus || 'Pending Verification';
-    const bucket = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
-    if (bucket) bucket.appendChild(card);
-    else {
+    const bucketList = document.querySelector(`.bucket[data-status="${boardStatus}"] .bucket-list`);
+    if (bucketList) {
+      bucketList.appendChild(card);
+    } else {
       const fallback = document.querySelector(`.bucket[data-status="Pending Verification"] .bucket-list`);
       if (fallback) fallback.appendChild(card);
     }
+
+    const metrics = stageMetrics.get(boardStatus) || { count: 0, items: 0, weight: 0 };
+    metrics.count += 1;
+    if (Number.isFinite(itemsVal)) metrics.items += itemsVal;
+    if (Number.isFinite(weightVal)) metrics.weight += weightVal;
+    stageMetrics.set(boardStatus, metrics);
   });
 
+  bucketEls.forEach(bucket => {
+    const status = bucket.dataset.status;
+    const metrics = stageMetrics.get(status) || { count: 0, items: 0, weight: 0 };
+    const countEl = bucket.querySelector('[data-stage-count]');
+    if (countEl) {
+      countEl.textContent = `${metrics.count} ${metrics.count === 1 ? 'Trip' : 'Trips'}`;
+    }
+    const itemsEl = bucket.querySelector('[data-stage-items]');
+    if (itemsEl) {
+      const itemsLabel = `${metrics.items} ${metrics.items === 1 ? 'Item' : 'Items'}`;
+      itemsEl.textContent = itemsLabel;
+    }
+    const weightEl = bucket.querySelector('[data-stage-weight]');
+    if (weightEl) {
+      const weightText = metrics.weight ? metrics.weight.toFixed(1) : '0';
+      weightEl.textContent = `${weightText} lbs`;
+    }
+    const listEl = bucket.querySelector('.bucket-list');
+    if (listEl && !listEl.children.length) {
+      listEl.classList.add('is-empty');
+    }
+  });
+
+  renderBoardSummary(boardList);
   initDragAndDrop();
 }
 
@@ -315,6 +903,8 @@ function initDragAndDrop() {
   const lists = document.querySelectorAll('.bucket-list');
   if (!lists.length) return;
   lists.forEach(list => {
+    if (list.dataset.sortableInitialized === 'true') return;
+    list.dataset.sortableInitialized = 'true';
     new Sortable(list, {
       group: {
         name: 'shared',
@@ -323,10 +913,15 @@ function initDragAndDrop() {
       },
       animation: 150,
       onMove(evt) {
+        document.querySelectorAll('.bucket-list').forEach(l => {
+          if (l !== evt.to) {
+            l.classList.remove('drag-over');
+          }
+        });
         evt.to.classList.add('drag-over');
       },
       onEnd(evt) {
-        lists.forEach(l => l.classList.remove('drag-over'));
+        document.querySelectorAll('.bucket-list').forEach(l => l.classList.remove('drag-over'));
         const card = evt.item;
         const newBucket = evt.to.closest('.bucket');
         const newStatus = newBucket.dataset.status;
@@ -336,8 +931,8 @@ function initDragAndDrop() {
           trip.boardStatus = newStatus;
           uploadTripsToFirebase(trips);
           setTimeout(() => {
-            renderChartsAndKPIs(trips);
-            renderBuckets(trips);
+            renderChartsAndKPIs(currentFilteredList.length ? currentFilteredList : trips);
+            renderBuckets();
           }, 200);
         }
       }
