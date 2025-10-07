@@ -1,72 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shappi Warehouse Dashboard</title>
-  <link rel="stylesheet" href="styles.css" />
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAniKvDw9BH_PUxSEl5kP8M0MBtslhjtE8",
+      authDomain: "bundle-board-dashboard.firebaseapp.com",
+      databaseURL: "https://bundle-board-dashboard-default-rtdb.firebaseio.com",
+      projectId: "bundle-board-dashboard",
+      storageBucket: "bundle-board-dashboard.firebasestorage.app",
+      messagingSenderId: "114676418819",
+      appId: "1:114676418819:web:fd8a544213d76b56050136",
+      measurementId: "G-M2WCBZ94YS"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.firebaseDb = db;
+    window.firebaseRef = ref;
+    window.firebaseSet = set;
+    window.firebaseOnValue = onValue;
+  </script>
 </head>
 <body>
-  <header>
-    <h1>Shappi Warehouse Dashboard</h1>
-    <div class="controls">
-      <div class="filters">
-        <label for="dateStart">From:</label>
-        <input type="date" id="dateStart" />
-        <label for="dateEnd">To:</label>
-        <input type="date" id="dateEnd" />
-        <button id="applyDateFilter">Apply</button>
-        <button id="resetDateFilter">Reset</button>
-      </div>
-      <div class="view-toggle">
-        <button id="btnGrid">Grid View</button>
-        <button id="btnList">List View</button>
-      </div>
+  <header class="app-header">
+    <div class="header-brand">
+      <img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/94/9a/4d/949a4db3-f268-4d38-b95f-da3a17ebc866/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/1200x630wa.png" alt="Shappi Icon" class="logo" />
+      <h1>Bundle Board</h1>
     </div>
+    <nav class="app-nav">
+      <a href="index.html" class="nav-link active">Dashboard</a>
+      <a href="board.html" class="nav-link">Trip Status Board</a>
+    </nav>
   </header>
 
-  <section id="summary-metrics">
-    <div>Total Trips: <span id="totalTrips">0</span></div>
-    <div>Total Items Accepted: <span id="totalItems">0</span></div>
-  </section>
-
-  <section id="charts-section">
-    <canvas id="statusChart" width="400" height="200"></canvas>
-  </section>
-
   <main>
-    <!-- Grid Container -->
-    <div id="gridView" class="grid-container">
-      <div class="grid-header status-col"></div>
-      <!-- Weekday headers will be inserted dynamically -->
-      <!-- Status rows / cells will be filled dynamically -->
-    </div>
+    <section id="upload-section">
+      <label for="csvUpload">Upload Trip CSV:</label>
+      <input type="file" id="csvUpload" accept=".csv" />
+      <div id="date-filter">
+        <button data-range="thisWeek">This Week</button>
+        <button data-range="nextWeek">Next Week</button>
+        <button data-range="allUpcoming">All Upcoming</button>
+        <label for="startDate">Start:</label>
+        <input type="date" id="startDate" />
+        <label for="endDate">End:</label>
+        <input type="date" id="endDate" />
+        <button id="applyDateFilter">Apply</button>
+      </div>
+    </section>
 
-    <!-- List View (hidden by default) -->
-    <div id="listView" class="list-container" style="display: none;">
-      <table>
+    <section id="legend-section">
+      <strong>Legend:</strong>
+      <span class="legend red-status">Red = Not “TX Approved”</span>
+      <span class="legend special-dest">Orange = Dest in CA, NV, NJ, NY, CO, MA</span>
+      <span class="legend highlight-name">Purple = Ambassador</span>
+    </section>
+
+    <section id="top-metrics">
+      <div id="top-kpi-container"></div>
+    </section>
+
+    <section id="dashboard-kpis">
+      <h2>Operations KPIs</h2>
+      <div id="kpi-container"></div>
+    </section>
+
+    <section id="charts-section">
+      <div class="chart-container"><canvas id="statusChart"></canvas></div>
+      <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+      <div class="chart-container"><canvas id="metricChart"></canvas></div>
+    </section>
+
+    <section id="trip-summary">
+      <h2>Filtered Trips</h2>
+      <table id="trip-table">
         <thead>
           <tr>
-            <th>Trip ID</th><th>Traveler</th><th>Ship Bundle</th><th>Max USA Date</th>
-            <th>USA Dest</th><th>Items Accepted</th><th>Status</th><th>Items Ready</th>
-            <th>Assigned To</th>
+            <th>Trip ID</th>
+            <th>Items Accepted</th>
+            <th>Traveler</th>
+            <th>USA Dest</th>
+            <th>Status</th>
+            <th>Ship Bundle</th>
+            <th>Max USA Date</th>
           </tr>
         </thead>
-        <tbody id="listBody">
-          <!-- Rows injected here -->
-        </tbody>
+        <tbody></tbody>
       </table>
-    </div>
+    </section>
+
   </main>
 
-  <footer>
-    <input type="file" id="csvInput" accept=".csv" />
-    <p>Upload CSV to load trips.</p>
-  </footer>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
+
