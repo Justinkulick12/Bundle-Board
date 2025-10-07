@@ -41,105 +41,7 @@ body.modal-open {
   align-items: center;
 }
 .nav-link {
-  color: var(--white);
-  text-decoration: none;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-}
-.nav-link:hover,
-.nav-link.active {
-  background-color: var(--shappi-purple-dark);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-}
-
-/* Sections */
-section {
-  margin: 1rem;
-  padding: 1rem;
-  background: var(--white);
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-/* Upload / filters */
-#upload-section {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-}
-#date-filter {
-  display: flex;
-  gap: 0.5rem;
-  margin-left: 2rem;
-}
-#date-filter button[data-range],
-#applyDateFilter {
-  background-color: var(--shappi-purple);
-}
-.legend.red-status { background-color: #ffd4d4; }
-.legend.special-dest { background-color: #fff3cc; }
-.legend.highlight-name { background-color: #ead4ff; }
-
-/* KPI cards */
-#top-kpi-container, #kpi-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-.kpi-card {
-  background: var(--white);
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  flex: 1;
-  min-width: 120px;
-  text-align: center;
-  font-size: 1em;
-  opacity: 0;
-  animation: fadeInAnim 0.4s forwards;
-}
-.kpi-card h3 {
-  margin: 0;
-  font-size: 1.1em;
-}
-.kpi-card p {
-  margin: 0.5rem 0 0;
-  font-size: 1.3em;
-  font-weight: bold;
-}
-gap: 1rem;
-}
-.kpi-card {
-  background: var(--white);
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  flex: 1;
-  min-width: 120px;
-  text-align: center;
-  font-size: 1em;
-  opacity: 0;
-  animation: fadeInAnim 0.4s forwards;
-}
-.kpi-card h3 {
-  margin: 0;
-  font-size: 1.1em;
-}
-.kpi-card p {
-  margin: 0.5rem 0 0;
-  font-size: 1.3em;
-  font-weight: bold;
-}
-
-/* Charts */
-#dashboard-kpis h2 {
-  margin-top: 0;
-}
-
-#kpi-container {
-  margin-top: 1rem;
+@@ -139,168 +143,698 @@ gap: 1rem;
 }
 
 #charts-section {
@@ -164,6 +66,205 @@ gap: 1rem;
   opacity: 0;
   animation: fadeInAnim 0.5s forwards;
   animation-delay: 0.3s;
+}
+#trip-table th,
+#trip-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+@keyframes fadeInAnim {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===============================
+   Pipedrive-inspired Trip Board
+   =============================== */
+
+#status-board.pipeline {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 1.5rem;
+}
+
+.pipeline-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin: 0 1rem 1.25rem;
+}
+
+.pipeline-header h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.65rem;
+}
+
+.pipeline-header p {
+  margin: 0;
+  color: #666;
+}
+
+.pipeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.primary-button {
+  background: var(--shappi-purple);
+  color: var(--white);
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(106,0,255,0.25);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.primary-button:hover {
+  background: var(--shappi-purple-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(106,0,255,0.32);
+}
+
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  border: 1px dashed rgba(106,0,255,0.4);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--shappi-purple);
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.upload-button:hover {
+  border-color: var(--shappi-purple);
+  box-shadow: 0 4px 12px rgba(106,0,255,0.18);
+}
+
+.upload-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.search-field {
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.search-field input[type="search"] {
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  background: transparent;
+  min-width: 220px;
+}
+
+.ghost-button {
+  border: 1px solid rgba(106,0,255,0.2);
+  background: rgba(106,0,255,0.06);
+  color: var(--shappi-purple);
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ghost-button:hover {
+  background: rgba(106,0,255,0.12);
+  box-shadow: 0 4px 10px rgba(106,0,255,0.18);
+}
+
+.board-summary {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0 1rem 1.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.summary-pill {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  min-width: 140px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  opacity: 0;
+  animation: fadeInAnim 0.4s forwards;
+}
+
+.summary-pill span.label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #777;
+}
+
+.summary-pill span.value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.summary-pill.empty-pill {
+  align-items: center;
+  text-align: center;
+}
+
+.summary-pill.empty-pill .value {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.bucket-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0 1rem 1.5rem;
+  overflow-x: auto;
+}
+
+.bucket {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 6px 20px rgba(15,23,42,0.08);
+  min-width: 300px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bucket-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 #trip-table th,
 #trip-table td {

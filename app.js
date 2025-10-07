@@ -652,31 +652,7 @@ function renderTopMetrics(list) {
   const metrics = [
     ['Total Trips', total],
     ['Total Approved', approved],
-    ['Total Pending', pending],
-    ['Ambassador Trips', ambassadors]
-  ];
-  metrics.forEach(([label, val]) => {
-    const div = document.createElement('div');
-    div.className = 'kpi-card';
-    div.innerHTML = `<h3>${label}</h3><p>${val}</p>`;
-    container.appendChild(div);
-  });
-}
-
-function renderTripTable(list) {
-  if (!tripTableBody) return;
-  tripTableBody.innerHTML = '';
-  list.forEach(trip => {
-    const tr = document.createElement('tr');
-    if ((trip.originalStatus || '').toLowerCase() !== 'tx approved') {
-      tr.classList.add('red-status');
-    }
-    if (SPECIAL_DESTS.has((trip['USA Dest'] || '').toUpperCase())) {
-      tr.classList.add('special-dest');
-    }
-    for (const nm of SPECIAL_NAMES) {
-      if ((trip['Traveler'] || '').includes(nm)) {
-        tr.classList.add('highlight-name');
+@@ -230,136 +680,281 @@ function renderTripTable(list) {
         break;
       }
     }
@@ -958,91 +934,6 @@ function renderChartsAndKPIs(list) {
     statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
     const bd = t['Ship Bundle'];
     if (bd) dayCounts[bd] = (dayCounts[bd] || 0) + 1;
-    const items = parseInt(t['Items Accepted']);
-    if (!isNaN(items)) totalItems += items;
-    const w = parseFloat(t['Weight']);
-    if (!isNaN(w)) totalWeight += w;
-    if (SPECIAL_DESTS.has((t['USA Dest'] || '').toUpperCase())) specialDestTrips++;
-    if ((t.originalStatus || '').toLowerCase().includes('pending')) {
-      readyToProcess += items || 0;
-    }
-  });
 
-  const totalTrips = list.length;
-
-  if (kpiContainer) {
-    kpiContainer.innerHTML = '';
-    const bottomKpis = [
-      ['Total Trips', totalTrips],
-      ['Total Items', totalItems],
-      ['Total Weight', totalWeight.toFixed(2)],
-      ['Special Dest Trips', specialDestTrips],
-      ['Ready to Process Items', readyToProcess]
-    ];
-    bottomKpis.forEach(([label, value]) => {
-      const card = document.createElement('div');
-      card.className = 'kpi-card';
-      card.innerHTML = `<h3>${label}</h3><p>${value}</p>`;
-      kpiContainer.appendChild(card);
-    });
-  }
-
-  if (statusCanvas) {
-    const statusCtx = statusCanvas.getContext('2d');
-    if (statusChart) statusChart.destroy();
-    statusChart = new Chart(statusCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(statusCounts),
-        datasets: [{
-          data: Object.values(statusCounts),
-          backgroundColor: ['#6A00FF','#f28e2c','#e15759','#76b7b2','#59a14f','#edc949','#af7aa1']
-        }]
-      }
-    });
-  }
-
-  if (dailyCanvas) {
-    const dailyCtx = dailyCanvas.getContext('2d');
-    if (dailyChart) dailyChart.destroy();
-    dailyChart = new Chart(dailyCtx, {
-      type: 'bar',
-      data: {
-        labels: Object.keys(dayCounts),
-        datasets: [{
-          label: '# of Trips',
-          data: Object.values(dayCounts),
-          backgroundColor: '#6A00FF'
-        }]
-      }
-    });
-  }
-
-  if (metricCanvas) {
-    const metricCtx = metricCanvas.getContext('2d');
-    if (metricChart) metricChart.destroy();
-    metricChart = new Chart(metricCtx, {
-      type: 'line',
-      data: {
-        labels: Object.keys(dayCounts),
-        datasets: [{
-          label: 'Trips per Day',
-          data: Object.values(dayCounts),
-          borderColor: '#e15759',
-          fill: false
-        },{
-          label: 'Items per Day',
-          data: Object.keys(dayCounts).map(day => {
-            return list
-              .filter(t => t['Ship Bundle'] === day)
-              .reduce((sum, t) => sum + (parseInt(t['Items Accepted']) || 0), 0);
-          }),
-          borderColor: '#59a14f',
-          fill: false
-        }]
-      }
-    });
-  }
-}
 
 
