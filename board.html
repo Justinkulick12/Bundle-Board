@@ -30,6 +30,31 @@
       <span class="legend highlight-name">Purple = Ambassador</span>
     </section>
 
+    window.firebaseRef = ref;
+    window.firebaseSet = set;
+    window.firebaseOnValue = onValue;
+  </script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <img src="https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/94/9a/4d/949a4db3-f268-4d38-b95f-da3a17ebc866/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/1200x630wa.png" alt="Shappi Icon" class="logo" />
+      <h1>Trip Status Board</h1>
+    </div>
+    <nav class="app-nav">
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="board.html" class="nav-link active">Trip Status Board</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="legend-section">
+      <strong>Legend:</strong>
+      <span class="legend red-status">Red = Not “TX Approved”</span>
+      <span class="legend special-dest">Orange = Dest in CA, NV, NJ, NY, CO, MA</span>
+      <span class="legend highlight-name">Purple = Ambassador</span>
+    </section>
+
     <section id="status-board" class="pipeline">
       <div class="pipeline-header">
         <div>
@@ -42,11 +67,6 @@
             <input type="search" id="boardSearch" placeholder="Search trips, travelers or destinations" />
           </label>
           <button type="button" id="clearBoardSearch" class="ghost-button">Clear</button>
-          <label for="csvUpload" class="upload-button">
-            <input type="file" id="csvUpload" accept=".csv" />
-            <span>Upload CSV</span>
-          </label>
-          <button type="button" id="createTripBtn" class="primary-button">New Trip</button>
         </div>
       </div>
 
@@ -153,64 +173,6 @@
       <div class="details-body"></div>
     </div>
   </aside>
-
-  <div id="createTripModal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="createTripTitle">
-      <div class="modal-header">
-        <h2 id="createTripTitle">Create Trip</h2>
-        <button type="button" class="modal-close" data-close aria-label="Close create trip form">&times;</button>
-      </div>
-      <form id="createTripForm" class="modal-form">
-        <div class="form-grid">
-          <label class="form-field">
-            <span>Trip ID*</span>
-            <input type="text" name="tripId" required />
-          </label>
-          <label class="form-field">
-            <span>Traveler</span>
-            <input type="text" name="traveler" />
-          </label>
-          <label class="form-field">
-            <span>USA Destination</span>
-            <input type="text" name="usaDest" />
-          </label>
-          <label class="form-field">
-            <span>Ship Bundle</span>
-            <input type="date" name="shipBundle" />
-          </label>
-          <label class="form-field">
-            <span>Items Accepted</span>
-            <input type="number" name="itemsAccepted" min="0" />
-          </label>
-          <label class="form-field">
-            <span>Weight (lbs)</span>
-            <input type="number" name="weight" min="0" step="0.1" />
-          </label>
-          <label class="form-field">
-            <span>Trip Verification Status</span>
-            <select name="verificationStatus" id="createTripVerification"></select>
-          </label>
-          <label class="form-field">
-            <span>Board Stage</span>
-            <select name="boardStatus" id="createTripStage"></select>
-          </label>
-          <label class="form-field">
-            <span>Assigned To</span>
-            <select name="assignedTo" id="createTripAssignee"></select>
-          </label>
-          <label class="form-field form-field--wide">
-            <span>Notes</span>
-            <textarea name="notes" rows="3"></textarea>
-          </label>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="ghost-button" data-close>Cancel</button>
-          <button type="submit" class="primary-button">Save Trip</button>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <script type="module" src="app.js"></script>
 </body>
